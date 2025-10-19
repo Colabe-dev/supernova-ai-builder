@@ -8,7 +8,18 @@ export function signRequest({ method, path, body = '', ts, keyId, secret }){
 
 export function verifySignature({ method, path, body, ts, header, secret, skewSec = 300 }){
   try {
-    const parts = Object.fromEntries(String(header).split(',').map(s => s.trim().split('=')));
+    // Parse header safely - split only on first '=' to handle base64 padding in signature
+    const parts = {};
+    String(header).split(',').forEach(pair => {
+      const trimmed = pair.trim();
+      const idx = trimmed.indexOf('=');
+      if (idx > 0) {
+        const key = trimmed.slice(0, idx);
+        const val = trimmed.slice(idx + 1);
+        parts[key] = val;
+      }
+    });
+    
     const now = Math.floor(Date.now()/1000);
     if (Math.abs(now - Number(parts.ts)) > skewSec) return false;
     const mine = signRequest({ method, path, body, ts: parts.ts, keyId: parts.keyId, secret });
