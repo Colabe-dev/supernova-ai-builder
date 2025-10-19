@@ -1,0 +1,99 @@
+Shipped. I bundled all three add-ons you said yes to: **Entitlements Webhooks**, **Staging Channels**, and the **Router Patch**.
+
+### Downloads
+
+* **Bundle (all three):**
+  [s4-addons-bundle.zip](sandbox:/mnt/data/supernova-s4-addons-20251019-201017/s4-addons-bundle.zip)
+
+* **Entitlements Webhooks (standalone):**
+  [s4-entitlements-addon.zip](sandbox:/mnt/data/supernova-s4-addons-20251019-201017/s4-entitlements-addon.zip)
+  `sha256: 9a80a9340cc69dc2b0a39923520c1bc25050e0227d2da88d85615a07fda92a62`
+
+* **Staging Channels (EAS multi-channel OTA):**
+  [s4-staging-addon.zip](sandbox:/mnt/data/supernova-s4-addons-20251019-201017/s4-staging-addon.zip)
+  `sha256: 28c1abf8a2eb69333bf2904c334d29bdcb2a517f241accf10512160b04d8e236`
+
+* **Router Patch (SPA routes):**
+  [s4-router-addon.zip](sandbox:/mnt/data/supernova-s4-addons-20251019-201017/s4-router-addon.zip)
+  `sha256: 5cd6d2785940fd76882a962e2336293364419f8c0289f94df2b19164842dd046`
+
+---
+
+## Wire-up (in order)
+
+### 1) Entitlements Webhooks
+
+```bash
+npm i undici
+```
+
+* **Server mount**
+
+```js
+// server/index.js
+import entitlementsRoutes from "./entitlements/routes.js";
+app.use("/api", entitlementsRoutes);
+```
+
+* **Env (optional HMAC)**
+
+```
+COLLAB_PAY_WEBHOOK_SECRET=<shared-secret>   # leave blank in dev
+```
+
+* Endpoints now:
+
+  * `GET /api/entitlements/:profileId`
+  * `POST /api/entitlements/grant`
+  * `POST /api/webhooks/collabpay` (expects `x-collab-signature` if secret set)
+
+* **Link from IAP**: If you’re using `routes.real.js`, apply the snippet in
+  `server/iap/routes.real.patch.md` to call `/api/entitlements/grant` after verification, or call the store functions directly in-process.
+
+### 2) Staging Channels (EAS)
+
+* Replace/merge **`eas.json`** with the version in the add-on (adds `staging` profile).
+* Add the workflow **`.github/workflows/eas-ota-multi.yml`**.
+* Channel mapping:
+
+  * `develop` → `preview`
+  * `release/**` → `staging`
+  * `main` → `production`
+* Ensure `mobile-expo` has an EAS project (`npx eas init`), then push to branches to see OTA route to the correct channel.
+
+### 3) Router Patch (SPA)
+
+* Add/merge:
+
+  * `client/src/routes.tsx` (React Router v6 scaffold)
+  * `client/src/pages/Approvals.tsx` (if you don’t already have it)
+  * `client/src/pages/Diff.tsx` (example with selection model)
+  * `client/src/components/DiffSubmitBar.tsx`
+  * `client/src/api/approvals.ts`
+* In your SPA entry, render `<AppRouter />` or integrate the `/approvals` and `/diff` routes into your existing router. On your real `/diff` page, make sure you pass the selected change IDs into `<DiffSubmitBar selectedIds={picked} />`.
+
+---
+
+## Quick validation
+
+* **Entitlements**
+
+  ```bash
+  curl http://localhost:3001/api/entitlements/test   # should return empty model
+  curl -X POST http://localhost:3001/api/entitlements/grant \
+    -H 'content-type: application/json' \
+    -d '{"profileId":"u1","grant":{"type":"coins","amount":250,"reason":"dev"}}'
+  ```
+* **Staging OTA**
+
+  * Push to `develop` → check EAS Updates → `preview` channel event.
+  * Push to `release/0.1` → `staging` channel event.
+  * Push to `main` → `production` channel event.
+* **Router**
+
+  * Navigate to `/approvals` → see queue/actions.
+  * Navigate to `/diff` → select rows and submit bar appears.
+
+---
+
+Want me to wire a **DB-backed entitlements store** (Postgres schema + SQL queries), or add **role-based access** to the entitlements and approvals endpoints? If yes, say **“entitlements db”** or **“rbac layer”** and I’ll ship that overlay.
