@@ -1,0 +1,160 @@
+Yes — we can make Supanova auto-integrate with Supabase. I’ll wire a **one-click Supabase Connector** into the builder with two paths:
+
+## 1) What “automatic” means (two modes)
+
+**A. Connect to an existing Supabase project (zero risk, fastest)**
+
+* You paste your **Project URL** and **Anon key** (client) + **Service-role key** (server-only).
+* Builder writes envs, generates clients, verifies connectivity, and scaffolds RLS-safe tables.
+
+**B. Auto-provision a new Supabase project (fully automated)**
+
+* You sign in (or paste a **Supabase Personal Access Token**) and pick **org / region / DB password**.
+* Builder calls the **Supabase Management API** to create the project, fetches keys, and runs SQL migrations + policies. (The Management API is GA and supports programmatic project creation.) ([Supabase][1])
+
+Both modes ship with:
+
+* **JS clients pre-configured** in web, server, and Expo mobile. ([Supabase][2])
+* **Deep linking** glue for mobile Auth (email magic link, OAuth). ([Expo Documentation][3])
+* Optional **local stack** via Supabase CLI for dev/offline. ([Supabase][4])
+
+---
+
+## 2) What I’ll add to Supernova (drop-in)
+
+### Env contract
+
+* **Client (Vite):** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+* **Server:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE`
+* **Helm values:** map these to Kubernetes Secrets so the keys never touch the browser.
+
+### Ready code (web + server + mobile)
+
+**client/src/lib/supabase.ts**
+
+```ts
+import { createClient } from '@supabase/supabase-js'
+export const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL!,
+  import.meta.env.VITE_SUPABASE_ANON_KEY!
+)
+```
+
+**server/src/integrations/supabase.ts**
+
+```ts
+import { createClient } from '@supabase/supabase-js'
+export const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE!, // server-only
+  { auth: { autoRefreshToken: false, persistSession: false } }
+)
+```
+
+**server/routes/db.health.ts**
+
+```ts
+import { Router } from 'express'
+import { supabaseAdmin } from '../integrations/supabase'
+const r = Router()
+r.get('/api/db/health', async (_req, res) => {
+  // lightweight sanity check: list 1 user (requires service role); or read a tiny “system_health” table we create
+  const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1 })
+  if (error) return res.status(500).json({ ok: false, error: String(error.message||error) })
+  return res.json({ ok: true, usersSeen: data?.users?.length ?? 0 })
+})
+export default r
+```
+
+**Expo (mobile)** — add at app startup:
+
+```ts
+import 'react-native-url-polyfill/auto' // required for supabase-js on RN
+```
+
+…and configure deep links per Supabase/Expo docs (we’ll prefill `scheme` and redirect URLs). ([Expo Documentation][3])
+
+### Database bootstrap (safe defaults)
+
+We’ll apply these SQLs automatically (via Management API or SQL editor) to give you an RLS-correct starter:
+
+```sql
+-- Profiles linked to auth.users
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  username text unique,
+  created_at timestamptz default now()
+);
+
+alter table public.profiles enable row level security;
+
+create policy "profiles are viewable by owner"
+on public.profiles for select using (auth.uid() = id);
+
+create policy "profiles are insertable by owner"
+on public.profiles for insert with check (auth.uid() = id);
+```
+
+We’ll also create a tiny `system_health` table for `/api/db/health` if you prefer not to use `auth.admin.listUsers()`.
+
+---
+
+## 3) Builder UX (live chat + multiple choice)
+
+* “**Connect Supabase**” wizard in `/settings` and **chat**:
+
+  * **Choice 1:** “Use existing project” → ask for URL + keys → auto-validate + write envs.
+  * **Choice 2:** “Create new project” → open OAuth or token field → pick org/region → create → fetch keys → run SQL → done.
+* Explains each step, detects common errors (bad URL, RLS block), and fixes automatically.
+
+---
+
+## 4) Security and deployment hygiene
+
+* **Never** put the **service role key** in the client or mobile app — server/K8s secrets only. ([Supabase][5])
+* On Kubernetes Helm values, we’ll add:
+
+```yaml
+secrets:
+  SUPABASE_URL: "https://<proj>.supabase.co"
+  SUPABASE_SERVICE_ROLE: "<service_role_key>"
+env:
+  VITE_SUPABASE_URL: "https://<proj>.supabase.co"
+  # VITE_SUPABASE_ANON_KEY is injected at build time for the client build job
+```
+
+* CI will inject **client ANON** at build time, server gets **SERVICE_ROLE** at deploy time via secrets/ExternalSecrets.
+
+---
+
+## 5) “Automatic provisioning” details (if you choose it)
+
+* We’ll call **Supabase Management API** to create the project, set DB password, and retrieve **Anon/Service** keys, then run the SQL bootstrap. (This API is documented and GA.) ([Supabase][6])
+* Alternative: do the same via **Supabase CLI** (`supabase projects create`), which we can run in CI for fully automated org setups. ([docs-pgth9qjfy-supabase.vercel.app][7])
+
+---
+
+## 6) What I need from you (pick one)
+
+**Option A — Connect existing (fastest):**
+
+* `SUPABASE_URL` (example: `https://abcd1234.supabase.co`)
+* `VITE_SUPABASE_ANON_KEY` (client key)
+* `SUPABASE_SERVICE_ROLE` (server key)
+
+**Option B — Auto-provision new:**
+
+* Supabase **Org ID** (or org name)
+* **Region** (e.g., `eu-central-1`)
+* **DB password** (will be stored as a secret)
+* A **Personal Access Token** or allow the builder to OAuth against Supabase (so we can call the Management API). ([Supabase][6])
+
+Tell me **A or B** and paste those fields. I’ll wire it into the builder’s settings, generate the code + policies, and push a ready patch.
+
+[1]: https://supabase.com/features/management-api?utm_source=chatgpt.com "Management API | Supabase Features"
+[2]: https://supabase.com/docs/reference/javascript/initializing?utm_source=chatgpt.com "JavaScript: Initializing | Supabase Docs"
+[3]: https://docs.expo.dev/guides/using-supabase/?utm_source=chatgpt.com "Using Supabase"
+[4]: https://supabase.com/docs/guides/local-development?utm_source=chatgpt.com "Local Development & CLI | Supabase Docs"
+[5]: https://supabase.com/docs/guides/api/api-keys?utm_source=chatgpt.com "Understanding API keys | Supabase Docs"
+[6]: https://supabase.com/docs/reference/api/introduction?utm_source=chatgpt.com "Management API Reference | Supabase Docs"
+[7]: https://docs-pgth9qjfy-supabase.vercel.app/docs/reference/cli/start?utm_source=chatgpt.com "Supabase CLI reference"
