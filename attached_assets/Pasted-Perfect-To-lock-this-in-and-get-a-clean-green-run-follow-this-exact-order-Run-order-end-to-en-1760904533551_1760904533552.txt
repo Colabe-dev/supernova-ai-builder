@@ -1,0 +1,149 @@
+Perfect. To lock this in and get a clean green run, follow this exact order.
+
+# Run order (end-to-end)
+
+1. **Drop the packs**
+
+   * Unzip:
+
+     * **S3 Mobile Base + EAS CI**
+     * **S4 Monorepo Overlay** (Observability + Secrets + IAP)
+     * (Optional) **S4 Mobile Sentry + Real IAP**
+   * Keep the folder structure as shipped (don’t merge files manually).
+
+2. **Install deps (root + mobile)**
+
+```bash
+# root (server + web)
+npm i pino pino-http @sentry/react @sentry/node zod dotenv undici
+
+# mobile
+cd mobile-expo
+npm i
+```
+
+3. **Wire server (one edit)**
+
+```js
+// server/index.js, at the very top:
+import { config } from "./env/index.js";
+import { applyObservability, errorHandler } from "./observability/index.js";
+import iapRoutes from "./iap/routes.js";              // or ./iap/routes.real.js if you enabled real IAP
+
+applyObservability(app);
+app.use("/api/iap", iapRoutes);
+// ...your existing routes
+app.use(errorHandler);
+```
+
+4. **Env (dev baseline)**
+   Create/append `.env` at repo root:
+
+```
+NODE_ENV=development
+DEV_FS_ENABLE=true
+DEV_IAP_OPEN=true            # turn OFF when using real verification
+SENTRY_DSN=
+SENTRY_ENV=dev
+COLLAB_PAY_API_BASE=http://localhost:4000
+COLLAB_PAY_SECRET=dev
+```
+
+5. **Mobile base init**
+
+```bash
+npm i -D eas-cli
+npx eas login
+cd mobile-expo && npx eas init
+```
+
+* Confirm `mobile-expo/app.json` has a real `updates.url` (no PROJECT_ID).
+
+6. **Point mobile to your API**
+   In `mobile-expo/src/App.tsx`, keep:
+
+```ts
+const API = process.env.EXPO_PUBLIC_API_BASE || 'http://localhost:3001';
+```
+
+Set in your **local env** or EAS secrets:
+
+```
+EXPO_PUBLIC_API_BASE=http://<your-dev-host>:3001
+```
+
+7. **Run smoke tests (local)**
+
+```bash
+# in one terminal
+npm run server   # or your start command
+
+# in another
+cd mobile-expo
+npx expo start
+```
+
+* App opens, **Refresh tokens** button pulls `/api/design/tokens` and reflects brand colors.
+
+8. **Enable CI**
+
+* GitHub → Settings → Secrets → Actions:
+
+  * `EAS_TOKEN` (from `npx eas token:create`)
+* Push to `main`. Workflows:
+
+  * **Mobile — EAS Build** (manual/PR)
+  * **Mobile — OTA Update** (on push to `main`)
+
+9. **(Optional) Real IAP**
+
+* Switch server mount to `./iap/routes.real.js`.
+* Add secrets:
+
+```
+IAP_STRICT=true
+GOOGLE_SERVICE_ACCOUNT_KEY=<service account JSON as one line>
+GOOGLE_PACKAGE_NAME=com.collab.supernova
+APPLE_BUNDLE_ID=com.collab.supernova
+IAP_USE_SANDBOX=true
+```
+
+* Smoke check:
+
+```bash
+curl -X POST http://localhost:3001/api/iap/google/verify \
+  -H 'content-type: application/json' \
+  -d '{"profileId":"u1","productId":"coins.100","purchaseToken":"<token>","packageName":"com.collab.supernova","grant":{"type":"coins","amount":1000}}'
+```
+
+10. **(Optional) Sentry**
+
+* Web: set `SENTRY_DSN` in `.env` (server already wires sourcemaps workflow).
+* Mobile: in Expo, set:
+
+```
+EXPO_PUBLIC_SENTRY_DSN=...
+EXPO_PUBLIC_SENTRY_ENV=preview
+EXPO_PUBLIC_SENTRY_TRACES=0.1
+```
+
+If you pulled the **mobile Sentry overlay**, import once in app:
+
+```ts
+import "./sentry";
+```
+
+---
+
+## Fast checks before cutting a preview build
+
+* `/dev` edits → `/diff` reflects diffs.
+* `/approvals` approves → branch pushes clean.
+* `mobile-expo` pulls tokens from your API.
+* CI “Mobile — EAS Build” succeeds on manual run.
+
+If you want me to ship tiny add-ons next:
+
+* **“entitlements webhooks”** → server webhooks for IAP → Collab Pay → automatic entitlement cache.
+* **“staging channels”** → EAS channels (+ separate envs) and gated OTA per branch.
+* **“router patch”** → SPA route add for `/approvals` + `/diff` submit bar wiring.
