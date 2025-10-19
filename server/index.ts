@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { applySecurity } from "./hardening";
 
 // Enable dev console features in development
 if (process.env.NODE_ENV === "development") {
@@ -9,6 +10,10 @@ if (process.env.NODE_ENV === "development") {
 }
 
 const app = express();
+
+// Apply security hardening (helmet, CORS, rate limiting)
+applySecurity(app);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

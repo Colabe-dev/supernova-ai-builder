@@ -1,0 +1,87 @@
+Yes—add it now. Here’s the exact, minimal way to wire the **brand system + layout** into your current React SPA + Express builder.
+
+## 1) Create these files
+
+**Repo root**
+
+* `design.tokens.json` → paste the token schema I gave you.
+
+**Express (server)**
+
+* `server/validateTokens.js` → Ajv validator (from my message).
+* Update your POST `/api/design/tokens` to use `validateTokens` and keep your SSE `tokensUpdated` broadcast.
+
+**React (client)**
+
+* `client/src/ui/tokens.css` → the CSS variables mapping.
+* `client/src/ui/applyTokens.ts` → `applyTokens()` helper.
+* `client/src/ui/primitives.tsx` → `Container`, `Stack`, `Grid`, `Card`, `Button`.
+
+## 2) Wire it
+
+**Server**
+
+```js
+// server/devRoutes.js (inside POST /design/tokens)
+import { validateTokens } from "./validateTokens.js";
+if (!validateTokens(req.body)) {
+  return res.status(400).json({ error: "invalid tokens", details: validateTokens.errors });
+}
+await fsp.writeFile(TOK, JSON.stringify(req.body, null, 2), "utf8");
+previewBroadcast({ type: "tokensUpdated" });
+res.json({ ok: true });
+```
+
+**Client init (once)**
+
+```ts
+// client/src/main.tsx or App.tsx
+import "./ui/tokens.css";
+import { applyTokens } from "./ui/applyTokens";
+
+(async function boot() {
+  const res = await fetch("/api/design/tokens");
+  const tokens = await res.json();
+  applyTokens(tokens);
+})();
+
+// optional: live update via SSE
+const es = new EventSource("/api/dev/preview/stream");
+es.addEventListener("tokensUpdated", async () => {
+  const t = await (await fetch("/api/design/tokens")).json();
+  applyTokens(t);
+});
+```
+
+## 3) Start using the primitives (gradual)
+
+Replace ad-hoc styles with tokens-based components:
+
+```tsx
+// example in any page
+import { Container, Card, Button, Stack } from "@/ui/primitives";
+export default function Home() {
+  return (
+    <Container>
+      <Stack gap={3}>
+        <Card><h2>Payments</h2><Button>Buy Pro</Button></Card>
+        <Card><h2>Chat</h2></Card>
+      </Stack>
+    </Container>
+  );
+}
+```
+
+## 4) Quick QA
+
+* `/dev`: change tokens → **instant** visual update.
+* `/diff`: shows token file writes as diffs.
+* Build passes: `npm run build`.
+* Dark/light contrast OK (validator blocks bad hex values).
+
+## 5) Security posture
+
+* Keep `/api/design/tokens` enabled only in dev, or owner-auth behind admin later.
+* Commit `design.tokens.json` to version control; no secrets inside.
+
+If you want, say **“ship brand pack overlay”** and I’ll output a ready-to-drop ZIP with these exact files in the right paths for your repo.

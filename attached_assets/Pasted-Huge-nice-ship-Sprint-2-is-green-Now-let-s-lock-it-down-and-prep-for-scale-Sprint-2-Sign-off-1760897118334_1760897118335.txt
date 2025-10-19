@@ -1,0 +1,201 @@
+Huge—nice ship. Sprint 2 is green. ✅
+Now let’s lock it down and prep for scale.
+
+# Sprint-2 Sign-off (Go/No-Go)
+
+* /dev loads; edits save; SSE refreshes preview.
+* /diff lists newest-first; diffs readable.
+* Terminal runs only whitelisted commands.
+* `DEV_FS_ENABLE=true` (and `DEV_TERMINAL_ENABLE=true` only locally).
+* Production build has **both flags unset**.
+
+# Hardening delta (apply now)
+
+These are small patches that buy you real safety.
+
+## 1) API security middleware (Express)
+
+```js
+// server/hardening.js
+import helmet from "helmet";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
+
+export function applySecurity(app) {
+  app.disable("x-powered-by");
+  app.use(helmet({
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }, // for preview/iframe
+  }));
+  app.use(cors({ origin: true, credentials: true }));
+  app.use(rateLimit({ windowMs: 60_000, max: 60 })); // 60 req/min global
+  app.use((req, _res, next) => {
+    // Body size limits (protect FS & terminal)
+    req.setTimeout(60_000);
+    next();
+  });
+}
+```
+
+Wire it:
+
+```js
+// server/index.js
+import express from "express";
+import { applySecurity } from "./hardening.js";
+import devRoutes from "./devRoutes.js";
+
+const app = express();
+applySecurity(app);
+app.use("/api", devRoutes);
+// ...
+```
+
+## 2) Lock dev routes harder
+
+* Require **both** `NODE_ENV !== 'production'` **and** `DEV_FS_ENABLE=true`.
+* Optional: IP allowlist for your VPN.
+
+```js
+// inside devRoutes.js before handlers
+const isDev = process.env.NODE_ENV !== "production";
+const guard = (flag) => (req, res, next) =>
+  (isDev && process.env[flag] === "true") ? next() : res.status(403).json({ error: "disabled" });
+
+r.get("/dev/fs",  guard("DEV_FS_ENABLE"), /* handler */);
+r.post("/dev/fs", guard("DEV_FS_ENABLE"), /* handler */);
+r.post("/dev/terminal", guard("DEV_TERMINAL_ENABLE"), /* handler */);
+```
+
+## 3) SSE heartbeat (prevents dead connections)
+
+**Server:**
+
+```js
+// in devRoutes.js
+setInterval(() => {
+  for (const c of sseClients) c.write("event: ping\ndata: {}\n\n");
+}, 30_000);
+```
+
+**Client (/dev):**
+
+```ts
+useEffect(() => {
+  const es = new EventSource("/api/dev/preview/stream");
+  es.onmessage = () => iframeRef.current?.contentWindow?.location.reload();
+  es.addEventListener("ping", () => {}); // keep-alive
+  es.onerror = () => { es.close(); setTimeout(() => setEs(new EventSource(...)), 2000); };
+  return () => es.close();
+}, []);
+```
+
+## 4) Diff metadata + revert
+
+Persist metadata so you can sort, audit, and undo.
+
+**Write sidecar JSON when saving:**
+
+```js
+const meta = {
+  id, path: relPath, ts: Date.now(),
+  user: req.user?.id ?? "dev", // wire later
+};
+await fsp.writeFile(path.join(diffsDir, `${id}.json`), JSON.stringify(meta));
+```
+
+**List newest-first:**
+
+```js
+r.get("/diff/list", async (_req, res) => {
+  try {
+    const dir = path.join(ROOT, ".supernova", "diffs");
+    const files = (await fsp.readdir(dir)).filter(f => f.endsWith(".json"));
+    const items = await Promise.all(files.map(async f => {
+      const meta = JSON.parse(await fsp.readFile(path.join(dir, f), "utf8"));
+      const diff = await fsp.readFile(path.join(dir, f.replace(".json",".diff")), "utf8");
+      return { ...meta, title: `Change ${meta.path}`, diff };
+    }));
+    items.sort((a,b)=> b.ts - a.ts);
+    res.json({ items });
+  } catch { res.json({ items: [] }); }
+});
+```
+
+**Revert endpoint (simple):**
+
+```js
+r.post("/diff/revert", expressJson(), async (req, res) => {
+  const { id } = req.body || {};
+  if (!id) return res.status(400).json({ error: "id required" });
+  const meta = JSON.parse(await fsp.readFile(path.join(ROOT, ".supernova/diffs", `${id}.json`), "utf8"));
+  const diff = await fsp.readFile(path.join(ROOT, ".supernova/diffs", `${id}.diff`), "utf8");
+  // naive revert: reapply previous content by stripping "+" lines and restoring "-" (improve with real patch later)
+  const lines = diff.split("\n");
+  const restored = lines.filter(l => l.startsWith("- ")).map(l => l.slice(2)).join("\n");
+  await fsp.writeFile(path.join(ROOT, meta.path), restored, "utf8");
+  res.json({ ok: true });
+});
+```
+
+## 5) Validate design tokens (schema)
+
+```js
+// server/tokensSchema.js
+import Ajv from "ajv";
+const ajv = new Ajv({ allErrors: true });
+export const validateTokens = ajv.compile({
+  type: "object",
+  properties: {
+    theme: {
+      type: "object",
+      properties: {
+        primary: { type: "string", pattern: "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" },
+        background: { type: "string", pattern: "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" },
+        text: { type: "string", pattern: "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" },
+        fontFamily: { type: "string" },
+        spacingBase: { type: "number" }
+      },
+      required: ["primary","background","text"],
+      additionalProperties: true
+    }
+  },
+  required: ["theme"], additionalProperties: false
+});
+```
+
+Use it in POST `/api/design/tokens`:
+
+```js
+import { validateTokens } from "./tokensSchema.js";
+r.post("/design/tokens", expressJson(), async (req, res) => {
+  if (!validateTokens(req.body)) return res.status(400).json({ error: "invalid tokens", details: validateTokens.errors });
+  await fsp.writeFile(TOK, JSON.stringify(req.body, null, 2), "utf8");
+  previewBroadcast({ type: "tokensUpdated" });
+  res.json({ ok: true });
+});
+```
+
+## 6) Observability (minimal)
+
+* Log file edits, terminal runs, token changes with a redact-safe logger.
+
+```js
+import pino from "pino"; const log = pino({ redact: ["req.headers.authorization"] });
+log.info({ event:"file.save", path: relPath, id });
+log.warn({ event:"terminal.exec", cmd }); // whitelisted but audited
+```
+
+---
+
+# Sprint-3 proposal (next up)
+
+**Goal:** governance + release quality.
+
+1. **Approvals service** (RBAC): `/api/approvals/*` with JWT auth, audit log, immutable records.
+2. **Branch/PR integration**: write diffs to a git worktree → auto PR with title/labels.
+3. **E2E tests**: Playwright for SPA; seed flows; gate deploy on green.
+4. **Mobile CI (EAS)**: build profiles + metadata CLI + OTA channel.
+5. **Perf budget**: bundle size limit, source-map-explorer, route-level code-splitting.
+6. **Secrets posture**: `.env.example` + runtime validation (zod) + CI secret scan.
+
+If you want, I can package a **“Sprint-2 Hardening Overlay”** (drop-in files for the patches above) right now.

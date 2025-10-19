@@ -132,13 +132,37 @@ export default function DevConsole() {
     }
   }
 
-  // SSE for preview refresh
+  // SSE for preview refresh with heartbeat and reconnect
   useEffect(() => {
-    const eventSource = new EventSource("/api/dev/preview/stream");
-    eventSource.onmessage = () => {
-      iframeRef.current?.contentWindow?.location.reload();
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: NodeJS.Timeout;
+
+    const connect = () => {
+      eventSource = new EventSource("/api/dev/preview/stream");
+      
+      eventSource.onmessage = () => {
+        iframeRef.current?.contentWindow?.location.reload();
+      };
+
+      eventSource.addEventListener("ping", () => {
+        // Heartbeat received, connection alive
+      });
+
+      eventSource.onerror = () => {
+        eventSource?.close();
+        // Reconnect after 2 seconds
+        reconnectTimeout = setTimeout(() => {
+          connect();
+        }, 2000);
+      };
     };
-    return () => eventSource.close();
+
+    connect();
+
+    return () => {
+      eventSource?.close();
+      clearTimeout(reconnectTimeout);
+    };
   }, []);
 
   // Load initial directory

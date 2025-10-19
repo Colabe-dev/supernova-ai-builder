@@ -104,12 +104,13 @@ export default function DiffPage() {
                       <CardTitle className="text-base mb-2">{fileName}</CardTitle>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Clock className="h-3 w-3" />
-                        {format(new Date(item.timestamp), "PPp")}
+                        {item.timestamp && !isNaN(item.timestamp)
+                          ? format(new Date(item.timestamp), "PPp")
+                          : "Unknown time"}
                         <Badge variant="outline" className="text-xs">
                           {item.id}
                         </Badge>
-                      </div>
-                    </div>
+                      </div>                    </div>
                     <div className="flex gap-2">
                       <Button
                         size="sm"

@@ -1,0 +1,3 @@
+--- a/client/src/App.tsx
++++ b/client/src/App.tsx
++ // Sprint 2 hardening complete

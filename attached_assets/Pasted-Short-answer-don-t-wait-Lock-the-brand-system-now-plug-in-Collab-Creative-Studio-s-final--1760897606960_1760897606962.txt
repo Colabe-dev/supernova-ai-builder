@@ -1,0 +1,238 @@
+Short answer: **don’t wait**. Lock the **brand system now**, plug in Collab Creative Studio’s final palette/typography later. That avoids refactors and gives you a single switch to brand everything.
+
+Below is a tight plan + copy-paste code you can drop into your **React SPA + Express** Sprint-2 app.
+
+---
+
+# What to do now (best practice)
+
+1. **Freeze a token schema** (names & categories) — values can change later.
+2. **Map tokens → CSS variables** (web) and a **tokens module** (mobile/future).
+3. Ship **layout primitives** (Container, Stack, Grid, Card, Button) that only read tokens.
+4. Add a **token validator** (contrast + format) to prevent bad palettes.
+5. Keep **“brand pack”** files separate so Collab can deliver the final brand without code changes.
+
+---
+
+# 1) Token schema (Collab Creative Studio preset)
+
+Create `design.tokens.json` (or update your existing file):
+
+```json
+{
+  "meta": { "brand": "collab-creative-studio", "version": "1.0.0" },
+  "theme": {
+    "mode": "dark",
+    "primary": "#fec72e",
+    "onPrimary": "#0b0b0b",
+    "bg": "#0b1f3a",
+    "surface": "#0f274d",
+    "text": "#ffffff",
+    "muted": "#96a5c0",
+    "success": "#19c37d",
+    "warning": "#f9ae2b",
+    "danger": "#ef4444"
+  },
+  "typography": {
+    "fontFamily": "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto",
+    "scale": [12, 14, 16, 18, 20, 24, 30, 36],
+    "lineHeight": 1.5
+  },
+  "radius": { "sm": 8, "md": 12, "lg": 16, "xl": 24, "full": 9999 },
+  "spacing": { "base": 8 },
+  "shadow": {
+    "sm": "0 1px 2px rgba(0,0,0,.15)",
+    "md": "0 6px 16px rgba(0,0,0,.25)",
+    "lg": "0 12px 32px rgba(0,0,0,.35)"
+  },
+  "motion": { "duration": { "sm": 120, "md": 220, "lg": 400 }, "easing": "cubic-bezier(0.2,0.8,0.2,1)" }
+}
+```
+
+---
+
+# 2) Map tokens → CSS variables (web)
+
+Add (or extend) a global CSS loaded by your SPA:
+
+```css
+/* tokens.css */
+:root {
+  --color-primary: #fec72e;
+  --color-on-primary: #0b0b0b;
+  --color-bg: #0b1f3a;
+  --color-surface: #0f274d;
+  --color-text: #ffffff;
+  --color-muted: #96a5c0;
+  --color-success: #19c37d;
+  --color-warning: #f9ae2b;
+  --color-danger:  #ef4444;
+
+  --font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-4: 32px;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.15);
+  --shadow-md: 0 6px 16px rgba(0,0,0,.25);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,.35);
+}
+
+html, body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-family);
+}
+```
+
+**Apply tokens at runtime** (so /dev Design Mode updates live):
+
+```ts
+// ui/applyTokens.ts
+export function applyTokens(t: any) {
+  const r = document.documentElement.style;
+  const set = (k: string, v: string | number) => r.setProperty(k, String(v));
+  const th = t.theme, sp = t.spacing, ra = t.radius, sh = t.shadow;
+
+  set('--color-primary', th.primary);
+  set('--color-on-primary', th.onPrimary ?? '#0b0b0b');
+  set('--color-bg', th.bg);
+  set('--color-surface', th.surface ?? th.bg);
+  set('--color-text', th.text);
+  set('--color-muted', th.muted ?? '#96a5c0');
+  set('--color-success', th.success ?? '#19c37d');
+  set('--color-warning', th.warning ?? '#f9ae2b');
+  set('--color-danger',  th.danger  ?? '#ef4444');
+
+  set('--radius-sm', `${ra.sm}px`); set('--radius-md', `${ra.md}px`);
+  set('--radius-lg', `${ra.lg}px`); set('--radius-xl', `${ra.xl}px`);
+
+  set('--space-1', `${sp.base}px`); set('--space-2', `${sp.base*2}px`);
+  set('--space-3', `${sp.base*3}px`); set('--space-4', `${sp.base*4}px`);
+
+  set('--shadow-sm', sh.sm); set('--shadow-md', sh.md); set('--shadow-lg', sh.lg);
+}
+```
+
+Call `applyTokens(await (await fetch('/api/design/tokens')).json())` once on app init, and you already send SSE “tokensUpdated” on save — so they update live.
+
+---
+
+# 3) Layout primitives (drop-in)
+
+```tsx
+// ui/primitives.tsx
+import React from "react";
+
+export const Container: React.FC<React.PropsWithChildren<{max?: number}>> = ({ max = 1200, children }) => (
+  <div style={{ margin: "0 auto", maxWidth: max, padding: "0 var(--space-2)" }}>{children}</div>
+);
+
+export const Stack: React.FC<React.PropsWithChildren<{gap?: number}>> = ({ gap = 2, children }) => (
+  <div style={{ display: "grid", gap: `var(--space-${gap})` }}>{children}</div>
+);
+
+export const Grid: React.FC<React.PropsWithChildren<{cols?: number; gap?: number}>> = ({ cols = 12, gap = 2, children }) => (
+  <div style={{
+    display: "grid",
+    gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+    gap: `var(--space-${gap})`
+  }}>{children}</div>
+);
+
+export const Card: React.FC<React.PropsWithChildren<{pad?: number}>> = ({ pad = 2, children }) => (
+  <div style={{
+    background: "var(--color-surface)",
+    borderRadius: "var(--radius-xl)",
+    padding: `var(--space-${pad})`,
+    boxShadow: "var(--shadow-md)"
+  }}>{children}</div>
+);
+
+export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement>> = ({ children, style, ...rest }) => (
+  <button
+    {...rest}
+    style={{
+      background: "var(--color-primary)",
+      color: "var(--color-on-primary)",
+      border: "none",
+      borderRadius: "var(--radius-lg)",
+      padding: "10px 16px",
+      fontWeight: 600,
+      cursor: "pointer",
+      boxShadow: "var(--shadow-sm)",
+      ...style
+    }}
+  >{children}</button>
+);
+```
+
+Use everywhere (home, /dev, /diff) so the brand flips propagate instantly.
+
+---
+
+# 4) Token validator (prevents bad palettes)
+
+```ts
+// server/validateTokens.ts
+import Ajv from "ajv";
+const ajv = new Ajv({ allErrors: true });
+const schema = {
+  type: "object",
+  properties: {
+    theme: {
+      type: "object",
+      properties: {
+        primary:   { type: "string", pattern: "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" },
+        bg:        { type: "string", pattern: "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" },
+        surface:   { type: "string", pattern: "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" },
+        text:      { type: "string", pattern: "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" }
+      },
+      required: ["primary","bg","text"],
+      additionalProperties: true
+    }
+  },
+  required: ["theme"],
+  additionalProperties: true
+};
+export const validateTokens = ajv.compile(schema);
+```
+
+In your POST `/api/design/tokens` route:
+
+```js
+import { validateTokens } from "./validateTokens.js";
+
+if (!validateTokens(req.body)) {
+  return res.status(400).json({ error: "invalid tokens", details: validateTokens.errors });
+}
+// optional: WCAG contrast check primary vs. bg/text before saving
+```
+
+---
+
+# 5) Layout guidance (keeps brand consistent)
+
+* **Grid:** 12-col desktop, 6-col tablet, 4-col mobile; `spacing.base = 8px`.
+* **Radius:** use `xl` for cards, `lg` for buttons/inputs.
+* **Elevation:** never exceed `--shadow-lg`; keep 1–2 levels max.
+* **Motion:** use `motion.duration.md` and `motion.easing` for hover/entrances.
+* **A11y:** enforce 4.5:1 contrast for body text; 3:1 for large text/UI.
+
+---
+
+## When the final Collab brand lands
+
+* Drop the official `design.tokens.json` into place (or import via `/api/design/tokens`).
+* Add **logo, favicon, social card** assets (no code changes to components).
+* Run **brand-lint** (token validator + contrast gate).
+* Ship.
+
+If you want, I’ll package a tiny **“Brand Pack v1”** overlay for your current repo: the token schema, CSS mapping, primitives, and validator wired to your existing endpoints.
