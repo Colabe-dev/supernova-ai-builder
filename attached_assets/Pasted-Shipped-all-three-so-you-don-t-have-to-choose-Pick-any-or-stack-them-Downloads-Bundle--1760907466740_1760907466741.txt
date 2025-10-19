@@ -1,0 +1,129 @@
+Shipped all three, so you don’t have to choose. Pick any or stack them.
+
+### Downloads
+
+* **Bundle (all 3):**
+  [s4-security-extras-bundle.zip](sandbox:/mnt/data/supernova-s4-security-extras-20251019-205146/s4-security-extras-bundle.zip)
+
+* **Auth Issuer (JWT minting, RS256):**
+  [s4-auth-issuer-overlay.zip](sandbox:/mnt/data/supernova-s4-security-extras-20251019-205146/s4-auth-issuer-overlay.zip)
+  `sha256: 5a70d6965b2afb5ffa4363073414e8b8cd23429600276b8ab369fe5d21d18688`
+
+* **Redis Cluster/Sentinel Rate Limiting:**
+  [s4-redis-cluster-overlay.zip](sandbox:/mnt/data/supernova-s4-security-extras-20251019-205146/s4-redis-cluster-overlay.zip)
+  `sha256: 6f6589786b16aacc348ca4ed95d83fad50c60fa6f9086f684c408c7916e22d57`
+
+* **mTLS Signing (internal services):**
+  [s4-mtls-signing-overlay.zip](sandbox:/mnt/data/supernova-s4-security-extras-20251019-205146/s4-mtls-signing-overlay.zip)
+  `sha256: a5f3ac32772cfb61b3e111ef88e85c6d124adcf2aa56df1bf4b5a575aa6ef00f`
+
+---
+
+## Wire-up (succinct)
+
+### 1) Auth Issuer (pairs with JWKS verifier)
+
+```bash
+npm i jose
+# rotate keys first if needed:
+node tools/gen-jwks.mjs
+```
+
+**server/index.js**
+
+```js
+import jwksRouter from "./auth/jwks/publish.js";
+import issuerRouter from "./auth/issuer/index.js";
+app.use("/auth", jwksRouter);
+app.use("/auth", issuerRouter); // POST /auth/token
+```
+
+**.env**
+
+```
+AUTH_ISSUER=https://collab.supernova.auth
+AUTH_AUDIENCE=supernova-api
+JWKS_DIR=server/auth/jwks/keys
+ISSUER_ADMIN_SECRET=<random>
+DEFAULT_TTL=3600
+```
+
+**Mint via CLI**
+
+```bash
+node tools/mint-jwt.mjs --sub u1 --roles admin,finance --ttl 3600
+```
+
+### 2) Redis Cluster/Sentinel limiter
+
+```bash
+npm i ioredis
+```
+
+**Options**
+
+```
+# single
+REDIS_URL=redis://localhost:6379
+# Sentinel
+REDIS_SENTINEL=host1:26379,host2:26379
+REDIS_MASTER=mymaster
+# Cluster
+REDIS_CLUSTER_NODES=host1:6379,host2:6379
+```
+
+**Use**
+
+```js
+import { rateLimit } from "./rateLimit/pro.js";
+app.use("/api/entitlements", rateLimit({ windowMs: 60_000, max: 120 }));
+```
+
+### 3) mTLS Signing
+
+* **Standalone HTTPS with client certs**
+
+```js
+import { createSecureServer } from "./mtls/server.js";
+const srv = createSecureServer(app);
+srv.listen(3001);
+```
+
+**.env**
+
+```
+TLS_CA=certs/ca.pem
+TLS_KEY=certs/server.key
+TLS_CERT=certs/server.pem
+```
+
+Generate dev CA + certs:
+
+```bash
+bash tools/gencerts.sh ./certs
+```
+
+* **Middleware mode** (behind proxy):
+
+```js
+import { requireMutualTLS } from "./mtls/middleware.js";
+app.use("/api/internal", requireMutualTLS());
+```
+
+* **Header signature** (for zero-trust when TLS terminates upstream):
+
+```js
+import { requireSigned } from "./mtls/signature.js";
+app.use("/api/internal", requireSigned(process.env.INTERNAL_HMAC_SECRET));
+```
+
+---
+
+## Recommended order
+
+1. **Security Pro** overlay already in → set `AUTH_JWKS_URL`, `AUTH_ISSUER`, `AUTH_AUDIENCE`.
+2. Add **Auth Issuer** → rotate keys → mint admin tokens for ops.
+3. Swap limiter to **Redis pro** (Sentinel/Cluster) in prod.
+4. Turn on **mTLS** for internal routes or between services. Use signatures if LB terminates TLS.
+
+Want me to prewire these into your current repo (one monorepo-ready overlay that edits `server/index.js` and env stubs)? Say **“auto-integrate security”** and I’ll ship it.
