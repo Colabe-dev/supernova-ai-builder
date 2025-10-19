@@ -1,0 +1,81 @@
+Shipped **both**: a data **seed hook** and an **exponential retry policy** for hooks.
+
+**Download:** [supernova-seed-retry-patch-20251019-220855.zip](sandbox:/mnt/data/supernova-seed-retry-patch-20251019-220855.zip)
+`sha256: bb8ec088505862b3150215b65d158910e72f1339b7b6ec71124940f26dbc2a`
+
+## What’s inside
+
+```
+supernova-server/
+  templates/
+    migrate-hook.yaml     # UPDATED: opt-in exponential retry
+    seed-hook.yaml        # NEW: seed job hook
+  values-retry.example.yaml
+  values-seeds.example.yaml
+
+helmfile/charts/supernova-server/
+  templates/
+    migrate-hook.yaml
+    seed-hook.yaml
+  values-retry.example.yaml
+  values-seeds.example.yaml
+
+README.md
+```
+
+## How retries work (clean + predictable)
+
+* If you set `*.retry.exponential.enabled=true`, the Job wraps your command in a bash loop:
+
+  * `initialSeconds` → starting backoff (default 2s)
+  * doubles each failure up to `maxSeconds` (default 60s)
+  * stops after `maxAttempts` (default 6)
+* Still uses Kubernetes `backoffLimit` for pod restarts; the loop is independent and gives you granular control.
+
+## Enable quickly
+
+Append to your env’s values (dev/staging/prod):
+
+```yaml
+# Retry for migrations
+migrations:
+  enabled: true
+  retry:
+    exponential:
+      enabled: true
+      initialSeconds: 2
+      maxSeconds: 60
+      maxAttempts: 6
+
+# Seed hook
+seeds:
+  enabled: true
+  when: ["post-install","post-upgrade"]  # or ["post-install"] only
+  weight: 20
+  command: ["node","db/seed.mjs"]
+  retry:
+    exponential:
+      enabled: true
+      initialSeconds: 2
+      maxSeconds: 60
+      maxAttempts: 6
+```
+
+## Deploy
+
+* **Helmfile:** `helmfile -e <env> apply`
+* **Helm:**
+  `helm upgrade --install supernova ./supernova-server -n <env> -f supernova-server/values-<env>.yaml`
+
+## Smoke checks
+
+```bash
+# See Jobs created by hooks
+kubectl -n <env> get jobs | egrep 'migrate|seed'
+
+# Logs
+kubectl -n <env> logs job/<release>-migrate-<rev>
+kubectl -n <env> logs job/<release>-seed-<rev>
+```
+
+Want me to also add a **CronJob** for periodic backfill/rehydration (e.g., recompute aggregates nightly), or wire **pre-upgrade** ordering for migrations that must run before new pods roll? Say **“backfill cron”** or **“pre-upgrade strict”**.

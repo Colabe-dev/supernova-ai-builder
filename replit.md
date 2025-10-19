@@ -96,6 +96,24 @@ Supernova utilizes specialized AI agents (Planner, Implementer, Tester, Fixer) p
 - **Diff Tracking and Approvals**: Automatic tracking of file changes with a unified diff viewer and a workflow for approving or rejecting AI-generated code.
 - **Security & Reliability**: Implements security headers, rate limiting, dev console guards, SSE heartbeats, and detailed audit logging.
 
+## Deployment & Operations
+
+### Documentation
+- **Production Runbook**: `docs/PRODUCTION_RUNBOOK.md` - Complete operational guide for deploying and managing Supernova in production, including infrastructure setup, security configuration, Helm deployment, migrations, observability, and incident response
+- **CI/CD Guide**: `docs/CICD_GUIDE.md` - Comprehensive pipeline documentation covering build workflows, branch→environment mapping, deployment procedures, rollback strategies, and troubleshooting
+- **Security Runbook**: `SECURITY_PRODUCTION_RUNBOOK.md` - Focused security stack guide with JWKS generation, JWT verification, rate limiting, and end-to-end smoke tests
+
+### Deployment Options
+- **Kubernetes**: Full manifests with Kustomize bases and dev/staging/prod overlays (available separately)
+- **Helm Chart**: `supernova-server` chart with environment-specific values and migration hooks (available separately)
+- **Helmfile**: Multi-environment orchestration with embedded chart (available separately)
+- **Helm Library**: `collab-lib` shared templates for standardized deployments across services (available separately)
+
+### CI/CD Pipeline
+- **GitHub Actions**: Automated Docker build & publish to GHCR
+- **Automated Deployment**: GitOps-style deployment via Helmfile
+- **Branch Mapping**: `develop` → dev, `main` → staging, `v*` tags → production
+
 ## External Dependencies
 - **OpenAI API**: Used for AI agent functionality (Planner, Implementer, Tester, Fixer).
 - **React**: Frontend UI library.
