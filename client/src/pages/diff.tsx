@@ -3,9 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { GitCompare, Clock, Send } from "lucide-react";
+import { GitCompare, Clock } from "lucide-react";
 import { format } from "date-fns";
+import { DiffSubmitBar } from "@/components/DiffSubmitBar";
 
 type DiffItem = {
   id: string;
@@ -17,6 +19,7 @@ type DiffItem = {
 export default function DiffPage() {
   const [items, setItems] = useState<DiffItem[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
@@ -37,12 +40,27 @@ export default function DiffPage() {
     }
   }
 
-  async function submitForApproval(diffId: string) {
+  const toggleSelection = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === items.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(items.map((item) => item.id));
+    }
+  };
+
+  const handleSubmitSuccess = () => {
+    setSelectedIds([]);
     toast({
-      title: "Coming soon",
-      description: "Submit to approvals workflow will be integrated in the next update",
+      title: "Success",
+      description: "Check the Approvals page to review your submission",
     });
-  }
+  };
 
   useEffect(() => {
     loadDiffs();
@@ -52,17 +70,30 @@ export default function DiffPage() {
     <div className="h-full flex flex-col p-6 gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <GitCompare className="h-8 w-8 text-primary" />
+          <h1 className="text-3xl font-bold gradient-text flex items-center gap-3">
+            <GitCompare className="h-8 w-8 neon-text-cyan" />
             Code Diffs
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-white/60">
             View all file changes recorded from the dev console
           </p>
         </div>
-        <Button onClick={loadDiffs} variant="outline" data-testid="button-refresh-diffs">
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          {items.length > 0 && (
+            <Button
+              onClick={toggleSelectAll}
+              variant="outline"
+              className="neon-text-pink"
+              style={{ borderColor: "var(--color-neon-pink)" }}
+              data-testid="button-select-all"
+            >
+              {selectedIds.length === items.length ? "Deselect All" : "Select All"}
+            </Button>
+          )}
+          <Button onClick={loadDiffs} variant="outline" data-testid="button-refresh-diffs">
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <ScrollArea className="flex-1">
@@ -95,41 +126,40 @@ export default function DiffPage() {
             return (
               <Card
                 key={item.id}
-                className="hover-elevate"
+                className={`neon-card transition-all ${
+                  selectedIds.includes(item.id) ? "ring-2 ring-cyan-500" : ""
+                }`}
                 data-testid={`diff-item-${item.id}`}
               >
                 <CardHeader>
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-4">
+                    <div className="pt-1">
+                      <Checkbox
+                        checked={selectedIds.includes(item.id)}
+                        onCheckedChange={() => toggleSelection(item.id)}
+                        data-testid={`checkbox-${item.id}`}
+                      />
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <CardTitle className="text-base mb-2">{fileName}</CardTitle>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <CardTitle className="text-base mb-2 neon-text-pink">{fileName}</CardTitle>
+                      <div className="flex items-center gap-2 text-sm text-white/60">
                         <Clock className="h-3 w-3" />
                         {item.timestamp && !isNaN(item.timestamp)
                           ? format(new Date(item.timestamp), "PPp")
                           : "Unknown time"}
-                        <Badge variant="outline" className="text-xs">
+                        <Badge className="text-xs bg-cyan-500/20 text-cyan-400 border-cyan-500/30">
                           {item.id}
                         </Badge>
-                      </div>                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => submitForApproval(item.id)}
-                        data-testid={`button-submit-${item.id}`}
-                      >
-                        <Send className="h-3 w-3 mr-1" />
-                        Submit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setExpandedId(isExpanded ? null : item.id)}
-                        data-testid={`button-toggle-${item.id}`}
-                      >
-                        {isExpanded ? "Collapse" : "Expand"}
-                      </Button>
+                      </div>
                     </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                      data-testid={`button-toggle-${item.id}`}
+                    >
+                      {isExpanded ? "Collapse" : "Expand"}
+                    </Button>
                   </div>
                 </CardHeader>
 
@@ -162,6 +192,8 @@ export default function DiffPage() {
           })}
         </div>
       </ScrollArea>
+      
+      <DiffSubmitBar selectedIds={selectedIds} onSubmitSuccess={handleSubmitSuccess} />
     </div>
   );
 }
