@@ -3,12 +3,22 @@
 ## Overview
 Supernova is an intelligent application builder platform that uses AI-powered agents to scaffold, build, and deploy web and mobile applications. The platform features specialized agents (Planner, Implementer, Tester, Fixer) that work together to generate production-ready code with an approvals workflow for reviewing changes.
 
-**Current State**: Fully functional MVP - all features working, core user journey tested
+**Current State**: Sprint 2 Complete - Dev Console, Diff Viewer, and Design Tokens functional
 **Tech Stack**: React, TypeScript, Express, Tailwind CSS, Shadcn UI, OpenAI API
 **Last Updated**: 2025-01-19
 
 ## Recent Changes
-- **2025-01-19**: Complete MVP implementation
+- **2025-01-19 (Sprint 2)**: Dev Console & Design Mode
+  - ✅ Dev Console page (/dev) with file tree, code editor, live preview, and terminal
+  - ✅ File system API with whitelisting and security (GET/POST /api/dev/fs)
+  - ✅ Diff tracking system - auto-records changes on file save
+  - ✅ Diff viewer page (/diff) with unified diff display
+  - ✅ Design Mode panel for customizing theme tokens (colors, fonts, spacing)
+  - ✅ Terminal execution with command whitelist (node -v, npm -v, etc.)
+  - ✅ SSE live preview refresh on file changes
+  - ✅ End-to-end tested: edit files → save → view diffs → customize tokens
+
+- **2025-01-19 (Sprint 1)**: Complete MVP implementation
   - ✅ Full frontend with landing page, dashboard, project management, approvals workflow
   - ✅ Theme system with dark mode (default) and light mode toggle
   - ✅ Purple brand design system (262 80% 58%) with Shadcn components
@@ -35,6 +45,8 @@ client/src/
 │   ├── landing.tsx          # Marketing landing page
 │   ├── dashboard.tsx        # Project list with cards
 │   ├── project-detail.tsx   # Individual project with agent activity
+│   ├── dev-console.tsx      # 🆕 File editor with design mode & terminal
+│   ├── diff.tsx             # 🆕 Diff viewer for code changes
 │   ├── approvals.tsx        # Code review workflow
 │   ├── templates.tsx        # Available project templates
 │   ├── settings.tsx         # Settings (placeholder)
@@ -52,13 +64,19 @@ client/src/
 ### Backend Structure
 ```
 server/
-├── routes.ts                # All API endpoints (projects, templates, agents, approvals)
+├── routes.ts                # Core API endpoints (projects, templates, agents, approvals)
+├── dev-routes.ts            # 🆕 Dev console APIs (fs, terminal, tokens, diffs)
 ├── storage.ts               # In-memory data storage with IStorage interface
 ├── agents.ts                # OpenAI agent runner (planner, implementer, tester, fixer)
 └── vite.ts                  # Vite dev server config
 
 shared/
 └── schema.ts                # Shared TypeScript types and Zod schemas
+
+.supernova/
+└── diffs/                   # 🆕 Auto-generated diffs from file saves
+
+design.tokens.json           # 🆕 Customizable design tokens
 ```
 
 ### Data Models
@@ -71,9 +89,12 @@ shared/
 1. **Landing Page**: Hero section with features, templates showcase, CTA
 2. **Project Management**: Create, list, and manage projects with template selection
 3. **AI Agent System**: Run specialized agents (Planner, Implementer, Tester, Fixer) on projects
-4. **Approvals Workflow**: Review and approve/reject AI-generated code changes with visual diffs
-5. **Template Library**: Browse available project templates
-6. **Theme System**: Dark/light mode with persistent preference
+4. **🆕 Dev Console**: File tree, code editor, live preview, terminal executor
+5. **🆕 Design Mode**: Customize theme tokens (colors, fonts, spacing) with live preview
+6. **🆕 Diff Viewer**: Track and review all file changes with unified diff format
+7. **Approvals Workflow**: Review and approve/reject AI-generated code changes
+8. **Template Library**: Browse available project templates
+9. **Theme System**: Dark/light mode with persistent preference
 
 ## Development Notes
 
@@ -86,6 +107,8 @@ shared/
 - Card Background (Dark): `hsl(220 15% 11%)`
 
 ### API Endpoints (Implemented ✅)
+
+**Core APIs:**
 - `GET /api/projects` - List all projects
 - `POST /api/projects` - Create new project
 - `GET /api/projects/:id` - Get project details
@@ -96,11 +119,28 @@ shared/
 - `GET /api/approvals/:id` - Get approval details
 - `PATCH /api/approvals/:id` - Update approval status (approve/reject)
 
+**🆕 Dev Console APIs:**
+- `GET /api/dev/fs?path=...` - List directory or read file content
+- `POST /api/dev/fs` - Write file and auto-generate diff
+- `GET /api/dev/preview/stream` - SSE stream for live preview refresh
+- `POST /api/dev/terminal` - Execute whitelisted commands (node -v, npm -v)
+- `GET /api/design/tokens` - Get design tokens configuration
+- `POST /api/design/tokens` - Update design tokens
+- `GET /api/diff/list` - List all recorded file diffs
+
 ### Technical Notes
 - **API Response Handling**: All mutations must call `.json()` on apiRequest response
 - **Agent Execution**: Agents run asynchronously with OpenAI - results appear in activity feed
 - **Storage**: In-memory only - data clears on server restart
 - **Templates**: Pre-seeded with Next.js 14 + Tailwind and Expo SDK 51 + NativeWind
+- **🆕 Dev Console Security**: 
+  - Auto-enabled in development mode (DEV_FS_ENABLE=true, DEV_TERMINAL_ENABLE=true)
+  - Path whitelist: ["client/src", "server", "shared", "public"]
+  - Command whitelist: ["node -v", "npm -v", "npm run build", "npm run lint"]
+  - No path traversal (..) allowed
+  - Disabled in production by default
+- **🆕 Design Tokens**: Stored in design.tokens.json, applied as CSS variables
+- **🆕 Diff Tracking**: Auto-generated unified diffs saved to .supernova/diffs/
 
 ### Future Enhancements
 1. Add real-time agent execution updates via WebSockets
