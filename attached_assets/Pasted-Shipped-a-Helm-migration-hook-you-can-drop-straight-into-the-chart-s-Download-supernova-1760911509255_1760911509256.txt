@@ -1,0 +1,76 @@
+Shipped a **Helm migration hook** you can drop straight into the chart(s).
+
+**Download:** [supernova-migrate-hook-patch-20251019-220429.zip](sandbox:/mnt/data/supernova-migrate-hook-patch-20251019-220429.zip)
+`sha256: e68ecaac45b819972bbad433486474686023a9dd8bd4eaf3151e702fbad8e4`
+
+## What’s inside
+
+```
+supernova-server/
+  templates/migrate-hook.yaml
+  values-migrations.example.yaml
+
+helmfile/charts/supernova-server/
+  templates/migrate-hook.yaml
+  values-migrations.example.yaml
+```
+
+## How it works
+
+* Creates a Job named: `<release>-migrate-<revision>`.
+* Hooks: `post-install, post-upgrade` with weight `10` (runs after resources).
+* Deletes on success (`before-hook-creation,hook-succeeded`).
+* Reuses your app image and inherits env via `*-env` ConfigMap + `*-secrets` Secret.
+
+## Enable & deploy
+
+1. Copy the appropriate files into your repo (either the standalone chart or the embedded chart under `helmfile/`).
+2. Add to your values (optional; defaults are sane):
+
+```yaml
+migrations:
+  enabled: true
+  when: ["post-install","post-upgrade"]
+  weight: 10
+  command: ["node","db/migrate.mjs"]
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 300
+```
+
+3. Deploy:
+
+```bash
+# Helm
+helm upgrade --install supernova ./supernova-server \
+  -n supernova --create-namespace \
+  -f supernova-server/values-prod.yaml
+
+# or Helmfile
+cd helmfile
+helmfile -e prod apply
+```
+
+## Smoke test
+
+* Trigger a no-op upgrade and watch the Job:
+
+```bash
+kubectl -n supernova get jobs | grep migrate
+kubectl -n supernova logs job/supernova-server-migrate-<rev>
+kubectl -n supernova describe job/supernova-server-migrate-<rev> | grep -E "Failed|BackoffLimit"
+```
+
+## Notes
+
+* If your schema **must** be applied **before** pods roll, flip to:
+
+```yaml
+migrations:
+  when: ["pre-install","pre-upgrade"]
+  weight: -10
+```
+
+* If you manage secrets via ExternalSecrets, nothing changes — the Job reads the same `*-secrets` as the deployment.
+
+Want me to wire a **data seeding** hook (separate from migrations) or add a **Job retry with exponential backoff** pattern? Say **“seed hook”** or **“retry policy”**.
