@@ -11,6 +11,8 @@ import {
   type InsertSnapshot,
   type DiffApproval,
   type InsertDiffApproval,
+  type Entitlement,
+  type InsertEntitlement,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -44,6 +46,14 @@ export interface IStorage {
   getDiffApproval(id: string): Promise<DiffApproval | undefined>;
   createDiffApproval(approval: InsertDiffApproval): Promise<DiffApproval>;
   updateDiffApproval(id: string, updates: Partial<DiffApproval>): Promise<DiffApproval | undefined>;
+
+  // Sprint 4 Add-ons: Entitlements
+  getEntitlement(profileId: string): Promise<Entitlement | undefined>;
+  createOrUpdateEntitlement(entitlement: InsertEntitlement): Promise<Entitlement>;
+  creditCoins(profileId: string, amount: number, reason: string): Promise<Entitlement>;
+  debitCoins(profileId: string, amount: number, reason: string): Promise<Entitlement | undefined>;
+  addSubscription(profileId: string, plan: string): Promise<Entitlement>;
+  addPurchase(profileId: string, purchase: any): Promise<Entitlement>;
 }
 
 export class MemStorage implements IStorage {
@@ -53,6 +63,7 @@ export class MemStorage implements IStorage {
   private approvals: Map<string, Approval>;
   private snapshots: Map<string, Snapshot>;
   private diffApprovals: Map<string, DiffApproval>;
+  private entitlements: Map<string, Entitlement>;
 
   constructor() {
     this.projects = new Map();
@@ -61,6 +72,7 @@ export class MemStorage implements IStorage {
     this.approvals = new Map();
     this.snapshots = new Map();
     this.diffApprovals = new Map();
+    this.entitlements = new Map();
     this.seedTemplates();
   }
 
@@ -261,6 +273,128 @@ export class MemStorage implements IStorage {
 
     const updated = { ...approval, ...updates, updatedAt: new Date() };
     this.diffApprovals.set(id, updated);
+    return updated;
+  }
+
+  // Sprint 4 Add-ons: Entitlements
+  async getEntitlement(profileId: string): Promise<Entitlement | undefined> {
+    return this.entitlements.get(profileId);
+  }
+
+  async createOrUpdateEntitlement(insertEntitlement: InsertEntitlement): Promise<Entitlement> {
+    const existing = this.entitlements.get(insertEntitlement.profileId);
+    const entitlement: Entitlement = {
+      ...insertEntitlement,
+      coins: insertEntitlement.coins ?? { balance: 0, total: 0 },
+      subscriptions: insertEntitlement.subscriptions ?? [],
+      purchases: insertEntitlement.purchases ?? [],
+      updatedAt: new Date(),
+    };
+    this.entitlements.set(insertEntitlement.profileId, entitlement);
+    return entitlement;
+  }
+
+  async creditCoins(profileId: string, amount: number, reason: string): Promise<Entitlement> {
+    let ent = this.entitlements.get(profileId);
+    if (!ent) {
+      ent = {
+        profileId,
+        coins: { balance: 0, total: 0 },
+        subscriptions: [],
+        purchases: [],
+        updatedAt: new Date(),
+      };
+    }
+    
+    const coins = typeof ent.coins === 'object' ? ent.coins : { balance: 0, total: 0 };
+    const newCoins = {
+      balance: (coins.balance || 0) + amount,
+      total: (coins.total || 0) + amount,
+    };
+    
+    const purchases = Array.isArray(ent.purchases) ? ent.purchases : [];
+    const newPurchases = [...purchases, { amount, reason, timestamp: new Date().toISOString() }];
+    
+    const updated: Entitlement = {
+      ...ent,
+      coins: newCoins,
+      purchases: newPurchases,
+      updatedAt: new Date(),
+    };
+    
+    this.entitlements.set(profileId, updated);
+    return updated;
+  }
+
+  async debitCoins(profileId: string, amount: number, reason: string): Promise<Entitlement | undefined> {
+    const ent = this.entitlements.get(profileId);
+    if (!ent) return undefined;
+    
+    const coins = typeof ent.coins === 'object' ? ent.coins : { balance: 0, total: 0 };
+    const newBalance = (coins.balance || 0) - amount;
+    if (newBalance < 0) return undefined;
+    
+    const purchases = Array.isArray(ent.purchases) ? ent.purchases : [];
+    const newPurchases = [...purchases, { amount: -amount, reason, timestamp: new Date().toISOString() }];
+    
+    const updated: Entitlement = {
+      ...ent,
+      coins: { ...coins, balance: newBalance },
+      purchases: newPurchases,
+      updatedAt: new Date(),
+    };
+    
+    this.entitlements.set(profileId, updated);
+    return updated;
+  }
+
+  async addSubscription(profileId: string, plan: string): Promise<Entitlement> {
+    let ent = this.entitlements.get(profileId);
+    if (!ent) {
+      ent = {
+        profileId,
+        coins: { balance: 0, total: 0 },
+        subscriptions: [],
+        purchases: [],
+        updatedAt: new Date(),
+      };
+    }
+    
+    const subscriptions = Array.isArray(ent.subscriptions) ? ent.subscriptions : [];
+    const newSubscriptions = [...subscriptions, { plan, startedAt: new Date().toISOString(), status: 'active' }];
+    
+    const updated: Entitlement = {
+      ...ent,
+      subscriptions: newSubscriptions,
+      updatedAt: new Date(),
+    };
+    
+    this.entitlements.set(profileId, updated);
+    return updated;
+  }
+
+  async addPurchase(profileId: string, purchase: any): Promise<Entitlement> {
+    let ent = this.entitlements.get(profileId);
+    if (!ent) {
+      ent = {
+        profileId,
+        coins: { balance: 0, total: 0 },
+        subscriptions: [],
+        purchases: [],
+        updatedAt: new Date(),
+      };
+    }
+    
+    const purchases = Array.isArray(ent.purchases) ? ent.purchases : [];
+    const newPurchases = [...purchases, { ...purchase, timestamp: new Date().toISOString() }];
+    
+    const updated: Entitlement = {
+      ...ent,
+      purchases: newPurchases,
+      updatedAt: new Date(),
+    };
+    
+    this.entitlements.set(profileId, updated);
     return updated;
   }
 }

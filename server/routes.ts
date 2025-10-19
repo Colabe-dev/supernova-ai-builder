@@ -6,6 +6,7 @@ import { runAgent, generateMockCodeChanges } from "./agents";
 import devRoutes from "./dev-routes";
 import approvalsRoutes from "./approvals-routes";
 import iapRoutes from "./iap/routes.real.js";
+import entitlementsRoutes from "./entitlements/routes.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Mount dev console routes
@@ -14,6 +15,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api", approvalsRoutes);
   // Mount IAP routes (Sprint 4)
   app.use("/api/iap", iapRoutes);
+  // Mount entitlements routes (Sprint 4 Add-ons)
+  app.use("/api", entitlementsRoutes);
   app.get("/api/projects", async (req, res) => {
     try {
       const projects = await storage.getProjects();

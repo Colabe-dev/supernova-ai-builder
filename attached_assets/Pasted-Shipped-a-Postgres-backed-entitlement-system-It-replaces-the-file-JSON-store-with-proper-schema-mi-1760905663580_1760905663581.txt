@@ -1,0 +1,98 @@
+Shipped a Postgres-backed entitlement system. It replaces the file JSON store with proper schema, migrations, and DB routes.
+
+**Download:** [supernova-s4-entitlements-db-20251019-202007.zip](sandbox:/mnt/data/supernova-s4-entitlements-db-20251019-202007.zip)
+`sha256: 475c0ae1c612c31ecf4f449bf0d01d9dfce56a48e6191a7b7959d3b8f0b21335`
+
+## What’s inside
+
+* `server/db/migrations/`
+
+  * `001_init.sql` — balances, ledger, subscriptions, migration table
+  * `002_indexes.sql` — perf + idempotency index (unique `external_ref`)
+* `server/db/migrate.mjs` — tiny migration runner (tracks `schema_migrations`)
+* `server/entitlements/db.js` — DB layer (coins + subs, transactional)
+* `server/entitlements/routes.db.js` — Express routes using Postgres
+* `server/entitlements/hmac.js` — HMAC helper (unchanged)
+* `docker-compose.db.yml` — local Postgres 15
+* `env/.env.db.sample.append` — env keys
+
+## Install & wire (ordered)
+
+1. **Start Postgres (optional local)**
+
+```bash
+docker compose -f docker-compose.db.yml up -d
+```
+
+2. **Deps & env**
+
+```bash
+npm i pg
+# .env
+DATABASE_URL=postgres://supernova:supernova@localhost:5432/supernova
+COLLAB_PAY_WEBHOOK_SECRET=
+```
+
+3. **Run migrations**
+
+```bash
+node server/db/migrate.mjs
+```
+
+4. **Mount routes**
+
+```js
+// server/index.js
+import entitlementsRoutes from "./entitlements/routes.db.js";
+app.use("/api", entitlementsRoutes);
+```
+
+## API contract (stable)
+
+* `GET /api/entitlements/:profileId` → `{ ok, entitlements: { coins, subscriptions[] } }`
+
+* `POST /api/entitlements/grant`
+
+  ```json
+  {
+    "profileId": "u1",
+    "grant": { "type": "coins", "amount": 250, "reason": "iap", "source": "google" },
+    "externalRef": "google:<purchaseToken>"   // optional idempotency key
+  }
+  ```
+
+  or
+
+  ```json
+  { "profileId":"u1", "grant": { "type":"subscription", "plan":"pro_monthly" } }
+  ```
+
+  or revoke:
+
+  ```json
+  { "profileId":"u1", "grant": { "type":"revoke", "plan":"pro_monthly" } }
+  ```
+
+* `POST /api/webhooks/collabpay` (+ optional `x-collab-signature`)
+
+  * Handles `coins.credited`, `subscription.activated`, `subscription.cancelled`.
+
+## Data model details
+
+* **Coins = BIGINT** (store smallest unit or coin units; no floats).
+* **Ledger is append-only**; `external_ref` is **unique** (when provided) → safe for retries.
+* **Subscriptions** upsert per `(profile_id, plan)`; `status ∈ {active,cancelled}`.
+
+## Test quickly
+
+```bash
+# grant coins
+curl -X POST http://localhost:3001/api/entitlements/grant \
+  -H 'content-type: application/json' \
+  -d '{"profileId":"u1","grant":{"type":"coins","amount":500,"reason":"dev"},"externalRef":"test-001"}'
+
+# read
+curl http://localhost:3001/api/entitlements/u1
+```
+
+Want me to add **RBAC + rate limit** to these routes or ship a **Prisma model** variant with typed client?

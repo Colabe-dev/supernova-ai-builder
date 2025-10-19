@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { verifyGooglePurchaseReal } from './google.real.js';
 import { verifyAppleSignedPayload, verifyAppleLegacyReceipt } from './apple.real.js';
-import { creditCoins, createSubscription } from '../collab/payClient.js';
+import { storage } from '../storage.js';
 
 const r = Router();
 const strict = process.env.IAP_STRICT === 'true';
@@ -21,12 +21,12 @@ r.post('/google/verify', async (req, res) => {
     if (!vr.ok) return res.status(402).json({ error: 'verification failed', details: vr.raw });
 
     if (grant?.type === 'coins') {
-      const out = await creditCoins(profileId, grant.amount, `google:${productId}`);
-      return res.json({ ok: true, collab: out });
+      const out = await storage.creditCoins(profileId, grant.amount, `google:${productId}`);
+      return res.json({ ok: true, entitlement: out });
     }
     if (grant?.type === 'subscription') {
-      const out = await createSubscription(profileId, grant.plan);
-      return res.json({ ok: true, collab: out });
+      const out = await storage.addSubscription(profileId, grant.plan);
+      return res.json({ ok: true, entitlement: out });
     }
     return res.json({ ok: true, verified: vr });
   } catch (e) { return res.status(500).json({ error: e.message }); }
@@ -51,12 +51,12 @@ r.post('/apple/verify', async (req, res) => {
     if (!vr.ok) return res.status(402).json({ error: 'verification failed' });
 
     if (grant?.type === 'coins') {
-      const out = await creditCoins(profileId, grant.amount, `apple`);
-      return res.json({ ok: true, collab: out });
+      const out = await storage.creditCoins(profileId, grant.amount, `apple`);
+      return res.json({ ok: true, entitlement: out });
     }
     if (grant?.type === 'subscription') {
-      const out = await createSubscription(profileId, grant.plan);
-      return res.json({ ok: true, collab: out });
+      const out = await storage.addSubscription(profileId, grant.plan);
+      return res.json({ ok: true, entitlement: out });
     }
     return res.json({ ok: true, verified: vr });
   } catch (e) { return res.status(500).json({ error: e.message }); }

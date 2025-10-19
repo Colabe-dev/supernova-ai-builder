@@ -105,3 +105,17 @@ export type InsertSnapshot = z.infer<typeof insertSnapshotSchema>;
 
 export type DiffApproval = typeof diffApprovals.$inferSelect;
 export type InsertDiffApproval = z.infer<typeof insertDiffApprovalSchema>;
+
+// Sprint 4 Add-ons: Entitlements for IAP/Collab Pay
+export const entitlements = pgTable("entitlements", {
+  profileId: varchar("profile_id").primaryKey(),
+  coins: jsonb("coins").notNull().default(sql`'{"balance":0,"total":0}'`),
+  subscriptions: jsonb("subscriptions").notNull().default(sql`'[]'`),
+  purchases: jsonb("purchases").notNull().default(sql`'[]'`),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertEntitlementSchema = createInsertSchema(entitlements);
+
+export type Entitlement = typeof entitlements.$inferSelect;
+export type InsertEntitlement = z.infer<typeof insertEntitlementSchema>;
