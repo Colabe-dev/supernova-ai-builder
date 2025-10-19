@@ -1,0 +1,239 @@
+--- a/client/src/App.tsx
++++ b/client/src/App.tsx
+- import { Switch, Route } from "wouter";
++ // Test comment
+- import { queryClient } from "./lib/queryClient";
++ import { Switch, Route } from "wouter";
+- import { QueryClientProvider } from "@tanstack/react-query";
++ import { queryClient } from "./lib/queryClient";
+- import { Toaster } from "@/components/ui/toaster";
++ import { QueryClientProvider } from "@tanstack/react-query";
+- import { TooltipProvider } from "@/components/ui/tooltip";
++ import { Toaster } from "@/components/ui/toaster";
+- import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
++ import { TooltipProvider } from "@/components/ui/tooltip";
+- import { AppSidebar } from "@/components/app-sidebar";
++ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+- import { ThemeProvider } from "@/contexts/theme-context";
++ import { AppSidebar } from "@/components/app-sidebar";
+- import { ThemeToggle } from "@/components/theme-toggle";
++ import { ThemeProvider } from "@/contexts/theme-context";
+- import Landing from "@/pages/landing";
++ import { ThemeToggle } from "@/components/theme-toggle";
+- import Dashboard from "@/pages/dashboard";
++ import Landing from "@/pages/landing";
+- import ProjectDetail from "@/pages/project-detail";
++ import Dashboard from "@/pages/dashboard";
+- import Templates from "@/pages/templates";
++ import ProjectDetail from "@/pages/project-detail";
+- import Approvals from "@/pages/approvals";
++ import Templates from "@/pages/templates";
+- import Settings from "@/pages/settings";
++ import Approvals from "@/pages/approvals";
+- import DevConsole from "@/pages/dev-console";
++ import Settings from "@/pages/settings";
+- import DiffPage from "@/pages/diff";
++ import DevConsole from "@/pages/dev-console";
+- import NotFound from "@/pages/not-found";
++ import DiffPage from "@/pages/diff";
+- 
++ import NotFound from "@/pages/not-found";
+- function DashboardLayout({ children }: { children: React.ReactNode }) {
++ 
+-   return (
++ function DashboardLayout({ children }: { children: React.ReactNode }) {
+-     <div className="flex h-screen w-full">
++   return (
+-       <AppSidebar />
++     <div className="flex h-screen w-full">
+-       <div className="flex flex-col flex-1">
++       <AppSidebar />
+-         <header className="flex items-center justify-between p-4 border-b">
++       <div className="flex flex-col flex-1">
+-           <SidebarTrigger data-testid="button-sidebar-toggle" />
++         <header className="flex items-center justify-between p-4 border-b">
+-           <ThemeToggle />
++           <SidebarTrigger data-testid="button-sidebar-toggle" />
+-         </header>
++           <ThemeToggle />
+-         <main className="flex-1 overflow-auto p-6">
++         </header>
+-           {children}
++         <main className="flex-1 overflow-auto p-6">
+-         </main>
++           {children}
+-       </div>
++         </main>
+-     </div>
++       </div>
+-   );
++     </div>
+- }
++   );
+- 
++ }
+- function Router() {
++ 
+-   return (
++ function Router() {
+-     <Switch>
++   return (
+-       <Route path="/" component={Landing} />
++     <Switch>
+-       <Route path="/dashboard">
++       <Route path="/" component={Landing} />
+-         {() => (
++       <Route path="/dashboard">
+-           <DashboardLayout>
++         {() => (
+-             <Dashboard />
++           <DashboardLayout>
+-           </DashboardLayout>
++             <Dashboard />
+-         )}
++           </DashboardLayout>
+-       </Route>
++         )}
+-       <Route path="/projects/:id">
++       </Route>
+-         {() => (
++       <Route path="/projects/:id">
+-           <DashboardLayout>
++         {() => (
+-             <ProjectDetail />
++           <DashboardLayout>
+-           </DashboardLayout>
++             <ProjectDetail />
+-         )}
++           </DashboardLayout>
+-       </Route>
++         )}
+-       <Route path="/templates">
++       </Route>
+-         {() => (
++       <Route path="/templates">
+-           <DashboardLayout>
++         {() => (
+-             <Templates />
++           <DashboardLayout>
+-           </DashboardLayout>
++             <Templates />
+-         )}
++           </DashboardLayout>
+-       </Route>
++         )}
+-       <Route path="/approvals">
++       </Route>
+-         {() => (
++       <Route path="/approvals">
+-           <DashboardLayout>
++         {() => (
+-             <Approvals />
++           <DashboardLayout>
+-           </DashboardLayout>
++             <Approvals />
+-         )}
++           </DashboardLayout>
+-       </Route>
++         )}
+-       <Route path="/settings">
++       </Route>
+-         {() => (
++       <Route path="/settings">
+-           <DashboardLayout>
++         {() => (
+-             <Settings />
++           <DashboardLayout>
+-           </DashboardLayout>
++             <Settings />
+-         )}
++           </DashboardLayout>
+-       </Route>
++         )}
+-       <Route path="/dev">
++       </Route>
+-         {() => (
++       <Route path="/dev">
+-           <DashboardLayout>
++         {() => (
+-             <DevConsole />
++           <DashboardLayout>
+-           </DashboardLayout>
++             <DevConsole />
+-         )}
++           </DashboardLayout>
+-       </Route>
++         )}
+-       <Route path="/diff">
++       </Route>
+-         {() => (
++       <Route path="/diff">
+-           <DashboardLayout>
++         {() => (
+-             <DiffPage />
++           <DashboardLayout>
+-           </DashboardLayout>
++             <DiffPage />
+-         )}
++           </DashboardLayout>
+-       </Route>
++         )}
+-       <Route component={NotFound} />
++       </Route>
+-     </Switch>
++       <Route component={NotFound} />
+-   );
++     </Switch>
+- }
++   );
+- 
++ }
+- function App() {
++ 
+-   const style = {
++ function App() {
+-     "--sidebar-width": "16rem",
++   const style = {
+-     "--sidebar-width-icon": "3rem",
++     "--sidebar-width": "16rem",
+-   };
++     "--sidebar-width-icon": "3rem",
+- 
++   };
+-   return (
++ 
+-     <QueryClientProvider client={queryClient}>
++   return (
+-       <ThemeProvider>
++     <QueryClientProvider client={queryClient}>
+-         <TooltipProvider>
++       <ThemeProvider>
+-           <SidebarProvider style={style as React.CSSProperties}>
++         <TooltipProvider>
+-             <div className="w-full">
++           <SidebarProvider style={style as React.CSSProperties}>
+-               <Toaster />
++             <div className="w-full">
+-               <Router />
++               <Toaster />
+-             </div>
++               <Router />
+-           </SidebarProvider>
++             </div>
+-         </TooltipProvider>
++           </SidebarProvider>
+-       </ThemeProvider>
++         </TooltipProvider>
+-     </QueryClientProvider>
++       </ThemeProvider>
+-   );
++     </QueryClientProvider>
+- }
++   );
+- 
++ }
+- export default App;
++ 
+- 
++ export default App;
++ 
