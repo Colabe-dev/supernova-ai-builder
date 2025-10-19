@@ -4,6 +4,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { applySecurity } from "./hardening";
 import { applyObservability, errorHandler } from "./observability/index.js";
 import webhooksRouter from "./entitlements/webhooks.db.js";
+import issuerRouter from "./auth/issuer/index.js";
 
 // Enable dev console features in development
 if (process.env.NODE_ENV === "development") {
@@ -25,6 +26,9 @@ app.use('/api/webhooks', webhooksRouter);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Mount Auth Issuer for JWT token generation (POST /auth/token)
+app.use('/auth', issuerRouter);
 
 app.use((req, res, next) => {
   const start = Date.now();
