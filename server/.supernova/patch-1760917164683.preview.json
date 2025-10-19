@@ -1,0 +1,5 @@
+{
+  "rel": "client/src/pages/Landing.tsx",
+  "base": "",
+  "next": "export default function Landing() {\n  return (\n    <div className=\"p-8\">\n      <h1 className=\"text-4xl font-bold mb-4\">Welcome to Supernova</h1>\n      <p className=\"text-lg\">Landing page scaffold created by AI.</p>\n    </div>\n  );\n}\n"
+}
