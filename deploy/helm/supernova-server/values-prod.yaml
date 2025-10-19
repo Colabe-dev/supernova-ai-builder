@@ -1,0 +1,166 @@
+# Production Values for Supernova Server
+# Fill in the <PLACEHOLDERS> with your actual production values
+
+# =============================================================================
+# REQUIRED: Container Image
+# =============================================================================
+image:
+  repository: ghcr.io/<YOUR_ORG>/supernova-server  # e.g., ghcr.io/collab/supernova-server
+  tag: v1.0.0                                       # Update to your release tag
+  pullPolicy: IfNotPresent
+
+# =============================================================================
+# REQUIRED: Ingress & Domain
+# =============================================================================
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: api.<YOUR_DOMAIN>                       # e.g., api.supernova.xyz
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: api-supernova-tls
+      hosts:
+        - api.<YOUR_DOMAIN>
+
+# =============================================================================
+# REQUIRED: Application Configuration
+# =============================================================================
+env:
+  NODE_ENV: "production"
+  DEV_AUTH_OPEN: "false"                            # MUST be false in production
+  AUTH_AUDIENCE: "supernova-api"
+  AUTH_ISSUER: "<AUTH_ISSUER_URL>"                  # e.g., https://auth.collab.xyz
+  PORT: "3001"
+  
+  # Rate Limiting
+  RATE_LIMIT_WINDOW_MS: "60000"                     # 60 seconds
+  RATE_LIMIT_READ_MAX: "120"                        # 120 reads/minute
+  RATE_LIMIT_WRITE_MAX: "30"                        # 30 writes/minute
+  RATE_LIMIT_WEBHOOK_MAX: "1200"                    # 1200 webhook calls/minute
+  
+  # Observability
+  SENTRY_ENV: "production"
+  SENTRY_TRACES_SAMPLE_RATE: "0.1"
+  LOG_LEVEL: "info"
+  
+  # IAP Configuration
+  IAP_STRICT: "true"
+  IAP_USE_SANDBOX: "false"
+
+# =============================================================================
+# REQUIRED: Secrets
+# =============================================================================
+secrets:
+  # Database
+  DATABASE_URL: "<postgresql://user:pass@host:5432/supernova_prod?sslmode=require>"
+  
+  # Redis (choose one)
+  REDIS_URL: "<redis://hostname:6379>"
+  # OR for Sentinel:
+  # REDIS_SENTINEL: "sentinel1:26379,sentinel2:26379,sentinel3:26379"
+  # REDIS_MASTER: "mymaster"
+  # OR for Cluster:
+  # REDIS_CLUSTER_NODES: "node1:6379,node2:6379,node3:6379"
+  
+  # Authentication
+  AUTH_JWKS_URL: "<AUTH_ISSUER_URL>/.well-known/jwks.json"  # e.g., https://auth.collab.xyz/.well-known/jwks.json
+  ISSUER_ADMIN_SECRET: "<GENERATE_64_CHAR_SECRET>"          # openssl rand -base64 48
+  APP_JWT_SECRET: "<GENERATE_64_CHAR_SECRET>"               # openssl rand -base64 48
+  SESSION_SECRET: "<GENERATE_64_CHAR_SECRET>"               # openssl rand -base64 48
+  
+  # Collab Pay Integration
+  COLLAB_PAY_API_BASE: "https://pay.<YOUR_DOMAIN>"
+  COLLAB_PAY_SECRET: "<SERVER_TO_PAY_SHARED_SECRET>"
+  COLLAB_PAY_WEBHOOK_SECRET: "<WEBHOOK_SIGNING_SECRET>"
+  
+  # Sentry (optional but recommended)
+  SENTRY_DSN: "<https://key@sentry.io/project>"             # or "" to disable
+  
+  # In-App Purchases (required for mobile)
+  GOOGLE_SERVICE_ACCOUNT_KEY: '<{"type":"service_account","project_id":"..."}>'
+  GOOGLE_PACKAGE_NAME: "com.collab.supernova"
+  APPLE_BUNDLE_ID: "com.collab.supernova"
+  APPLE_SHARED_SECRET: "<APP_STORE_SHARED_SECRET>"
+
+# =============================================================================
+# OPTIONAL: Resource Limits
+# =============================================================================
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+# =============================================================================
+# OPTIONAL: Autoscaling
+# =============================================================================
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 65
+  targetMemoryUtilizationPercentage: 70
+
+# =============================================================================
+# OPTIONAL: Database Migrations (Recommended: Enabled)
+# =============================================================================
+migrations:
+  enabled: true
+  when: ["post-install", "post-upgrade"]
+  weight: 10
+  command: ["node", "db/migrate.mjs"]
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 300
+  retry:
+    exponential:
+      enabled: true
+      initialSeconds: 2
+      maxSeconds: 60
+      maxAttempts: 6
+
+# =============================================================================
+# OPTIONAL: Data Seeding (Disable for production, enable for staging/dev)
+# =============================================================================
+seeds:
+  enabled: false                                    # Set true only if you need reference data
+  when: ["post-install"]                            # Only on first install
+  weight: 20
+  command: ["node", "db/seed.mjs"]
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  ttlSecondsAfterFinished: 300
+  retry:
+    exponential:
+      enabled: true
+      initialSeconds: 2
+      maxSeconds: 60
+      maxAttempts: 6
+
+# =============================================================================
+# OPTIONAL: Pod Disruption Budget (Recommended for HA)
+# =============================================================================
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# =============================================================================
+# OPTIONAL: Network Policy (Enable if cluster supports)
+# =============================================================================
+networkPolicy:
+  enabled: false                                    # Enable for extra security
+
+# =============================================================================
+# OPTIONAL: Service Monitor (Enable if using Prometheus)
+# =============================================================================
+serviceMonitor:
+  enabled: false
+  interval: 30s
