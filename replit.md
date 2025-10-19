@@ -3,11 +3,22 @@
 ## Overview
 Supernova is an intelligent application builder platform that uses AI-powered agents to scaffold, build, and deploy web and mobile applications. The platform features specialized agents (Planner, Implementer, Tester, Fixer) that work together to generate production-ready code with an approvals workflow for reviewing changes.
 
-**Current State**: Sprint 2 Complete - Dev Console, Diff Viewer, and Design Tokens functional
+**Current State**: Sprint 2 Hardening Complete - Production-ready with security, reliability, and observability
 **Tech Stack**: React, TypeScript, Express, Tailwind CSS, Shadcn UI, OpenAI API
 **Last Updated**: 2025-01-19
 
 ## Recent Changes
+- **2025-01-19 (Sprint 2 Hardening)**: Security, Reliability & Observability
+  - ✅ Security middleware: Helmet (headers), CORS, rate limiting (300 req/min dev, 60 production)
+  - ✅ Hardened dev route guards: require NODE_ENV !== 'production' AND env flags
+  - ✅ SSE heartbeat (30s ping) with automatic client reconnection
+  - ✅ Diff metadata: JSON sidecars with {id, path, ts, user} + revert endpoint
+  - ✅ Design token validation: AJV schema with hex color pattern matching
+  - ✅ Structured audit logging: Pino with sensitive data redaction
+  - ✅ Trust proxy enabled for Replit X-Forwarded-For headers
+  - ✅ Fixed bugs: timestamp validation in diff viewer, rate limit bypass for static assets
+  - ✅ End-to-end tested: all hardening features verified working
+
 - **2025-01-19 (Sprint 2)**: Dev Console & Design Mode
   - ✅ Dev Console page (/dev) with file tree, code editor, live preview, and terminal
   - ✅ File system API with whitelisting and security (GET/POST /api/dev/fs)
@@ -65,7 +76,9 @@ client/src/
 ```
 server/
 ├── routes.ts                # Core API endpoints (projects, templates, agents, approvals)
-├── dev-routes.ts            # 🆕 Dev console APIs (fs, terminal, tokens, diffs)
+├── dev-routes.ts            # Dev console APIs (fs, terminal, tokens, diffs)
+├── hardening.ts             # 🆕 Security middleware (helmet, CORS, rate limiting)
+├── tokens-schema.ts         # 🆕 AJV schema for design token validation
 ├── storage.ts               # In-memory data storage with IStorage interface
 ├── agents.ts                # OpenAI agent runner (planner, implementer, tester, fixer)
 └── vite.ts                  # Vite dev server config
@@ -74,9 +87,9 @@ shared/
 └── schema.ts                # Shared TypeScript types and Zod schemas
 
 .supernova/
-└── diffs/                   # 🆕 Auto-generated diffs from file saves
+└── diffs/                   # Auto-generated diffs (.diff + .json metadata)
 
-design.tokens.json           # 🆕 Customizable design tokens
+design.tokens.json           # Customizable design tokens
 ```
 
 ### Data Models
@@ -119,28 +132,45 @@ design.tokens.json           # 🆕 Customizable design tokens
 - `GET /api/approvals/:id` - Get approval details
 - `PATCH /api/approvals/:id` - Update approval status (approve/reject)
 
-**🆕 Dev Console APIs:**
+**Dev Console APIs:**
 - `GET /api/dev/fs?path=...` - List directory or read file content
-- `POST /api/dev/fs` - Write file and auto-generate diff
-- `GET /api/dev/preview/stream` - SSE stream for live preview refresh
+- `POST /api/dev/fs` - Write file and auto-generate diff with metadata
+- `GET /api/dev/preview/stream` - SSE stream with 30s heartbeat ping
 - `POST /api/dev/terminal` - Execute whitelisted commands (node -v, npm -v)
 - `GET /api/design/tokens` - Get design tokens configuration
-- `POST /api/design/tokens` - Update design tokens
-- `GET /api/diff/list` - List all recorded file diffs
+- `POST /api/design/tokens` - Update design tokens (validated with AJV)
+- `GET /api/diff/list` - List all recorded file diffs from metadata
+- `POST /api/diff/revert` - Revert file to previous version
 
 ### Technical Notes
 - **API Response Handling**: All mutations must call `.json()` on apiRequest response
 - **Agent Execution**: Agents run asynchronously with OpenAI - results appear in activity feed
 - **Storage**: In-memory only - data clears on server restart
 - **Templates**: Pre-seeded with Next.js 14 + Tailwind and Expo SDK 51 + NativeWind
-- **🆕 Dev Console Security**: 
-  - Auto-enabled in development mode (DEV_FS_ENABLE=true, DEV_TERMINAL_ENABLE=true)
+
+**Security & Hardening:**
+- **Trust Proxy**: Enabled for Replit X-Forwarded-For headers
+- **Rate Limiting**: 300 req/min in development, 60 in production
+  - Static assets bypassed in dev (/@, .js, .css, .map)
+  - Headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset
+- **Dev Console Guards**: 
+  - Require NODE_ENV !== 'production' AND env flags (DEV_FS_ENABLE, DEV_TERMINAL_ENABLE)
   - Path whitelist: ["client/src", "server", "shared", "public"]
   - Command whitelist: ["node -v", "npm -v", "npm run build", "npm run lint"]
   - No path traversal (..) allowed
-  - Disabled in production by default
-- **🆕 Design Tokens**: Stored in design.tokens.json, applied as CSS variables
-- **🆕 Diff Tracking**: Auto-generated unified diffs saved to .supernova/diffs/
+- **Security Headers**: Helmet middleware with CORS credentials support
+- **Audit Logging**: Structured JSON logs with pino, redacts authorization/cookie headers
+  - Events: file.save, terminal.exec, tokens.updated, guard.denied, diff.revert
+
+**Reliability & Features:**
+- **SSE Heartbeat**: 30-second ping to prevent dead connections
+  - Client auto-reconnects with 2-second delay on error
+- **Diff Metadata**: JSON sidecars (.json + .diff) with {id, path, ts, user}
+  - Sorted by timestamp descending
+  - Revert endpoint restores previous content
+- **Token Validation**: AJV schema enforces hex color patterns (#RGB or #RRGGBB)
+  - Returns 400 with validation errors if invalid
+- **Design Tokens**: Stored in design.tokens.json, applied as CSS variables
 
 ### Future Enhancements
 1. Add real-time agent execution updates via WebSockets
@@ -152,7 +182,9 @@ design.tokens.json           # 🆕 Customizable design tokens
 ## Dependencies
 - **Frontend**: React, Wouter, TanStack Query, Shadcn UI, Lucide Icons
 - **Backend**: Express, OpenAI SDK (via Replit AI Integrations)
-- **Validation**: Zod, Drizzle-Zod
+- **Validation**: Zod, Drizzle-Zod, AJV (JSON schema)
+- **Security**: Helmet, CORS, Express Rate Limit
+- **Observability**: Pino (structured logging)
 - **Styling**: Tailwind CSS with custom design tokens
 
 ## Environment Variables
