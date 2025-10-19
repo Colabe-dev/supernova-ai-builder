@@ -1,0 +1,95 @@
+Shipped a hardened **Security Pro** overlay: JWKS-based JWT auth with key rotation + Redis-backed rate limiting.
+
+**Download:** [supernova-s4-security-pro-20251019-204217.zip](sandbox:/mnt/data/supernova-s4-security-pro-20251019-204217.zip)
+`sha256: 3197975c5effd6cb8bef3ae2eee227998fbb46b1ec33224e9ce4d1a5cb61baf3`
+
+### What’s inside
+
+* `server/auth/verify.js` — JWT verification via **remote JWKS** (RS256/ES256) using `jose`; roles-aware middleware.
+* `server/auth/jwks/publish.js` — self-hosted **JWKS endpoint**: `GET /auth/.well-known/jwks.json`.
+* `tools/gen-jwks.mjs` — **key generator**; rotates keys and updates `jwks.json`.
+* `server/rateLimit/redis.js` — **Redis** fixed-window limiter (atomic, INCR+EXPIRE).
+* `server/rateLimit/index.js` — chooses Redis if available; **falls back** to in-memory.
+* `server/entitlements/routes.db.secpro.js` — entitlements routes using jwks-auth + redis limiter.
+* `env/.env.securitypro.sample.append` — env keys you need.
+
+### Install
+
+```bash
+npm i jose ioredis
+```
+
+### Wire (minimal)
+
+```js
+// server/index.js
+import jwksRouter from "./auth/jwks/publish.js";     // optional if you host keys
+app.use("/auth", jwksRouter);
+
+import entitlementsRoutes from "./entitlements/routes.db.secpro.js";
+app.use("/api", entitlementsRoutes);
+```
+
+**.env**
+
+```
+AUTH_JWKS_URL=https://<your-domain>/auth/.well-known/jwks.json  # or external IdP
+AUTH_ISSUER=https://collab.supernova.auth
+AUTH_AUDIENCE=supernova-api
+DEV_AUTH_OPEN=false
+
+JWKS_DIR=server/auth/jwks/keys
+
+REDIS_URL=redis://localhost:6379
+RATE_LIMIT_WINDOW_MS=60000
+RATE_LIMIT_READ_MAX=120
+RATE_LIMIT_WRITE_MAX=30
+RATE_LIMIT_WEBHOOK_MAX=1200
+```
+
+### Self-hosting keys (optional)
+
+```bash
+node tools/gen-jwks.mjs
+# commits new kid under server/auth/jwks/keys/<kid> and updates jwks.json
+```
+
+Expose with:
+
+```
+GET /auth/.well-known/jwks.json
+```
+
+### Behavior
+
+* **Auth**
+
+  * Parses `Authorization: Bearer <JWT>`, verifies against `AUTH_JWKS_URL`.
+  * Enforces `iss` and `aud` (`AUTH_ISSUER`, `AUTH_AUDIENCE`).
+  * `requireAuth({ roles: ['admin','finance'] })` gates writes.
+  * `DEV_AUTH_OPEN=true` permits dev bypass.
+
+* **Rate limits**
+
+  * Reads: default `120 req/min` per-IP.
+  * Writes: `30 req/min`.
+  * Webhooks: `1200 req/min` keyed as `wh:<ip>`.
+  * If Redis is down, **fails open** to in-memory limiter.
+
+### Quick checks
+
+```bash
+# JWKS available (if self-hosting)
+curl http://localhost:3001/auth/.well-known/jwks.json
+
+# Entitlements read with a valid JWT (sub=u1)
+curl -H "authorization: Bearer <JWT>" http://localhost:3001/api/entitlements/u1
+```
+
+If you want me to add:
+
+* **Signed JWT issuing** in your auth server (private key holder) + CLI to mint test tokens,
+* **Redis Cluster** support & circuit-breakers,
+* or **request signing** for internal services,
+
+say **“auth issuer”**, **“redis cluster”**, or **“mTLS signing”** and I’ll ship the overlay.

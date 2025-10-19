@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { applySecurity } from "./hardening";
 import { applyObservability, errorHandler } from "./observability/index.js";
+import webhooksRouter from "./webhooks.js";
 
 // Enable dev console features in development
 if (process.env.NODE_ENV === "development") {
@@ -17,6 +18,10 @@ applySecurity(app);
 
 // Apply observability (Pino logging + Sentry)
 applyObservability(app);
+
+// IMPORTANT: Register webhook routes BEFORE JSON body parsing
+// to allow raw body access for signature verification
+app.use('/api/webhooks', webhooksRouter);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));

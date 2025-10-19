@@ -1,0 +1,112 @@
+Shipped both upgrades: **RBAC + rate limiting** and a **Prisma-typed entitlements layer**. Grab the bundle or each overlay.
+
+### Downloads
+
+* **Bundle (both overlays):**
+  [entitlements-security-prisma-bundle.zip](sandbox:/mnt/data/supernova-s4-entitlements-security-prisma-20251019-203134/entitlements-security-prisma-bundle.zip)
+
+* **Security (RBAC + rate limit):**
+  [entitlements-security-overlay.zip](sandbox:/mnt/data/supernova-s4-entitlements-security-prisma-20251019-203134/entitlements-security-overlay.zip)
+  `sha256: 61d2a930dae0cbd5264eab21436bd72306ae2a4406864f40f85e48f9264bc4d7`
+
+* **Prisma (typed client + routes):**
+  [entitlements-prisma-overlay.zip](sandbox:/mnt/data/supernova-s4-entitlements-security-prisma-20251019-203134/entitlements-prisma-overlay.zip)
+  `sha256: c9d8e82420542d26d6046edf48f6eec3c66b1e800feae95da201d32b16180c00`
+
+---
+
+## Wire-up (clean order)
+
+### A) Security overlay
+
+```bash
+npm i jsonwebtoken
+```
+
+**server/index.js**
+
+```js
+import entitlementsRoutes from "./entitlements/routes.db.secured.js"; // uses RBAC + rate limits
+app.use("/api", entitlementsRoutes);
+```
+
+**.env**
+
+```
+APP_JWT_SECRET=<your-secret>
+DEV_AUTH_OPEN=true   # optional dev bypass
+```
+
+**Token shape expected** (JWT payload):
+
+```json
+{ "sub": "<profileId>", "roles": ["user"|"admin"|"finance"] }
+```
+
+* `/entitlements/:profileId` → self or roles `admin|finance`
+* `/entitlements/grant` → roles `admin|finance`
+* `/webhooks/collabpay` → HMAC + higher rate limit
+
+### B) Prisma overlay
+
+```bash
+npm i @prisma/client
+npm i -D prisma
+npx prisma generate
+```
+
+* Uses your existing Postgres tables (`ent_*`), mapped via `@@map` / `@map`.
+* **Optional** routes:
+
+```js
+import entitlementsPrismaRoutes from "./entitlements/routes.prisma.js";
+app.use("/api", entitlementsPrismaRoutes);
+```
+
+* Or call the typed layer directly:
+
+```js
+import { getEntitlements, grantCoins } from "./entitlements/prismaClient.js";
+```
+
+---
+
+## Sanity tests
+
+**RBAC**
+
+```bash
+# user can read own
+curl -H 'authorization: Bearer <JWT of sub=u1, roles=["user"]>' http://localhost:3001/api/entitlements/u1
+
+# forbidden reading others
+curl -H 'authorization: Bearer <user token>' http://localhost:3001/api/entitlements/u2
+
+# admin can grant
+curl -X POST http://localhost:3001/api/entitlements/grant \
+  -H 'authorization: Bearer <JWT roles=["admin"]>' \
+  -H 'content-type: application/json' \
+  -d '{"profileId":"u1","grant":{"type":"coins","amount":100,"reason":"dev"}}'
+```
+
+**Rate-limit**
+
+* Defaults: 120 req/min for reads; 30 req/min for writes; 1200 req/min for webhooks.
+* Exceeding returns `429` with `Retry-After`.
+
+**Prisma**
+
+```bash
+node -e "require('./server/entitlements/prismaClient.js').getEntitlements('u1').then(console.log)"
+```
+
+---
+
+## Recommended hardening next
+
+* **Key rotation** for `APP_JWT_SECRET` (kid in JWT header + JWKS endpoint).
+* **Signed webhooks**: enforce `COLLAB_PAY_WEBHOOK_SECRET` and log fails to Sentry.
+* **Redis-backed rate limiter** if you’re running behind multiple instances.
+* **Audit log** events (`grant`, `revoke`, `webhook`) with actor + IP.
+
+If you want Redis-based limiter + JWKS public-key auth, say **“security pro”** and I’ll ship the overlay.
