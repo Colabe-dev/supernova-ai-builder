@@ -1,0 +1,470 @@
+Absolutely. Let’s bolt on a **live chat + swarm-of-builders** layer to Supernova so it behaves like Altan/Replit Create: fast chat, multiple-choice guidance, step-by-step explanations, and autonomous fixes.
+
+Below is a **tight implementation plan + drop-in code** to get a working v1 today (WebSocket chat, multi-agent orchestrator shell, multiple-choice prompts, auto-fix loops), reusing your existing `/dev` FS + terminal + diff + SSE refresh.
+
+---
+
+# Sprint 4 — Live Chat + Swarm Orchestrator (v1)
+
+## Architecture (what we’re adding)
+
+* **Realtime channel:** WebSocket at `ws://<server>/api/chat/ws` (stream events, status, patches).
+* **Swarm orchestrator:** lightweight “blackboard” with role agents:
+
+  * `Planner` → break down asks, produce MCQs when uncertain.
+  * `Builder` → edits files via existing `/api/dev/fs` endpoints.
+  * `Tester` → runs whitelisted commands (`npm run build|lint|test`) and parses errors.
+  * `Explainer` → turns errors into step-by-step human messages.
+  * `Fixer` → proposes diffs, applies if `autonomy=true`, else asks for approval.
+* **Message protocol (JSON):**
+
+  * `client → server`: `{type:"user", text, autonomy?, sessionId}`, `{type:"choice", id}`, `{type:"approve_patch", patchId}`
+  * `server → client`: `agent_message`, `question`, `progress`, `tool_result`, `patch_preview`, `patch_applied`, `error_explained`
+* **Safety:** Reuses your allowlisted FS paths and terminal whitelist. No new privileged ops.
+
+---
+
+## Minimal code patch (drop-in)
+
+### 1) Server — dependencies
+
+**`server/package.json`** (add `ws`)
+
+```json
+{
+  "dependencies": {
+    "cors":"^2.8.5",
+    "diff":"^5.2.0",
+    "express":"^4.19.2",
+    "express-rate-limit":"^7.0.0",
+    "helmet":"^7.1.0",
+    "jsonwebtoken":"^9.0.2",
+    "morgan":"^1.10.0",
+    "ws":"^8.18.0"
+  }
+}
+```
+
+### 2) Server — WebSocket entry
+
+**`server/index.js`** (add near the bottom)
+
+```js
+// --- WebSocket chat (Swarm) ---
+import { createServer } from 'http';
+import { initChatWS } from './src/chat/ws.js';
+
+const port = process.env.PORT || 3001;
+const serverHttp = createServer(app);
+initChatWS(serverHttp);            // attach WS on same port
+serverHttp.listen(port, () => console.log(`[server] listening on :${port}`));
+```
+
+*(Remove the previous `app.listen(port, ...)` line; the HTTP server wraps it now.)*
+
+### 3) Server — terminal whitelist add “test”
+
+**`server/src/dev/terminal.js`** – add one line to `ALLOW`
+
+```js
+const ALLOW = new Map([
+  ['node -v', ['node','-v']],
+  ['npm -v',  ['npm','-v']],
+  ['npm run build', ['npm','run','build']],
+  ['npm run lint',  ['npm','run','lint']],
+  ['npm test',      ['npm','test']]          // <-- added
+]);
+```
+
+### 4) Server — chat WS + orchestrator
+
+**`server/src/chat/ws.js`**
+
+```js
+import { WebSocketServer } from 'ws';
+import { nanoid } from '../util/nanoid.js';
+import { orchestrate } from '../orchestrator/index.js';
+
+export function initChatWS(httpServer) {
+  const wss = new WebSocketServer({ noServer: true });
+  httpServer.on('upgrade', (req, socket, head) => {
+    if (!req.url.startsWith('/api/chat/ws')) return;
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+  });
+
+  wss.on('connection', (ws) => {
+    const sessionId = nanoid();
+    const send = (msg) => { try { ws.send(JSON.stringify(msg)); } catch {} };
+
+    send({ type:'system', sessionId, message:'Connected. Ask me anything about your app. Toggle autonomy in the UI to auto-apply changes.' });
+
+    ws.on('message', async (data) => {
+      let msg; try { msg = JSON.parse(data.toString()); } catch { return; }
+      await orchestrate({ msg, sessionId, send });
+    });
+  });
+}
+```
+
+**`server/src/util/nanoid.js`**
+
+```js
+export function nanoid(len=10) {
+  const a='0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let s=''; for (let i=0;i<len;i++) s += a[Math.floor(Math.random()*a.length)];
+  return s;
+}
+```
+
+**`server/src/orchestrator/index.js`**
+
+```js
+import { planner } from './planner.js';
+import { builder } from './roles/builder.js';
+import { tester } from './roles/tester.js';
+import { explainer } from './roles/explainer.js';
+import { fixer } from './roles/fixer.js';
+
+const sessions = new Map(); // {sessionId:{autonomy:boolean, history:[]}}
+
+export async function orchestrate({ msg, sessionId, send }) {
+  const s = sessions.get(sessionId) || { autonomy:false, history:[] };
+  sessions.set(sessionId, s);
+
+  if (msg.type === 'user') {
+    if (typeof msg.autonomy === 'boolean') s.autonomy = msg.autonomy;
+    s.history.push({ role:'user', text: msg.text });
+    send({ type:'progress', stage:'understanding' });
+
+    // 1) plan + (optional) quick-choices
+    const plan = await planner(msg.text);
+    if (plan.choices?.length) send({ type:'question', id: plan.id, text: plan.question, choices: plan.choices });
+
+    // 2) execute naive loop: build -> test -> explain/fix if needed
+    if (plan.actions?.length) {
+      for (const act of plan.actions) {
+        if (act.kind === 'edit') {
+          const preview = await builder(act);
+          send({ type:'patch_preview', patchId: preview.id, path: act.path, diff: preview.diff });
+
+          if (s.autonomy || act.auto) {
+            const applied = await builder({ ...act, apply: true, previous: preview.base });
+            send({ type:'patch_applied', patchId: preview.id, path: act.path, ok: applied.ok });
+          } else {
+            send({ type:'agent_message', agent:'Builder', text:'Proposed change ready. Approve to apply.' });
+          }
+        }
+      }
+
+      // test pass
+      const t = await tester({ cmd: actTestCmd(plan.test || 'build') });
+      send({ type:'tool_result', tool:'terminal', ok: t.ok, stdout: t.stdout, stderr: t.stderr });
+
+      if (!t.ok) {
+        const explain = await explainer({ stdout: t.stdout, stderr: t.stderr });
+        send({ type:'error_explained', text: explain.text, steps: explain.steps });
+
+        const fix = await fixer({ stdout: t.stdout, stderr: t.stderr });
+        for (const act of fix.actions || []) {
+          const prev = await builder(act);
+          send({ type:'patch_preview', patchId: prev.id, path: act.path, diff: prev.diff });
+          if (s.autonomy) {
+            const applied = await builder({ ...act, apply: true, previous: prev.base });
+            send({ type:'patch_applied', patchId: prev.id, path: act.path, ok: applied.ok });
+          }
+        }
+      }
+    }
+    send({ type:'progress', stage:'idle' });
+  }
+
+  if (msg.type === 'approve_patch') {
+    const applied = await builder({ id: msg.patchId, apply: true });
+    send({ type:'patch_applied', patchId: msg.patchId, ok: applied.ok });
+  }
+
+  if (msg.type === 'choice') {
+    // For v1 we just echo choice; planner can refine later
+    send({ type:'agent_message', agent:'Planner', text:`Got it: ${msg.id}. Executing.` });
+  }
+}
+
+function actTestCmd(kind) {
+  if (kind === 'lint') return 'npm run lint';
+  if (kind === 'test') return 'npm test';
+  return 'npm run build';
+}
+```
+
+**`server/src/orchestrator/planner.js`** (heuristic v1; later replace with LLM)
+
+```js
+export async function planner(text) {
+  const lower = (text||'').toLowerCase();
+  const actions = [];
+
+  // simple intents
+  if (lower.includes('landing')) {
+    actions.push({
+      kind:'edit',
+      path:'client/src/pages/Landing.jsx',
+      content: `import React from 'react';
+export default function Landing(){return <div style={{padding:24}}><h1>Welcome to Supernova</h1><p>Landing page scaffold.</p></div>}
+`
+    });
+  }
+  if (lower.includes('dark') || lower.includes('theme')) {
+    actions.push({
+      kind:'edit',
+      path:'server/design.tokens.json',
+      mutator: (json) => ({...json, theme:{...json.theme, bg:'#0b1f3a', text:'#ffffff', primary:'#fec72e'}})
+    });
+  }
+
+  const choices = [
+    { id:'make-landing', label:'Create landing page scaffold' },
+    { id:'add-auth',     label:'Add auth placeholders' },
+    { id:'prepare-build',label:'Build & preview app' }
+  ];
+
+  return {
+    id: 'plan-1',
+    question: 'What should I do first?',
+    choices,
+    actions,
+    test: 'build'
+  };
+}
+```
+
+**`server/src/orchestrator/roles/builder.js`**
+
+```js
+import fs from 'fs';
+import path from 'path';
+import { diffLines } from 'diff';
+import { normalizeAllowed, ensureDir } from '../../dev/paths.js';
+import { statePath } from '../../dev/paths.js';
+
+export async function builder(act) {
+  const id = 'patch-' + Date.now();
+  const rel = act.path;
+  const abs = normalizeAllowed(rel);
+
+  if (!act.apply) {
+    // preview
+    let base = '';
+    if (fs.existsSync(abs)) base = fs.readFileSync(abs,'utf-8');
+
+    let next = base;
+    if (act.content != null) next = act.content;
+    if (act.mutator) {
+      try {
+        const json = base ? JSON.parse(base) : {};
+        next = JSON.stringify(act.mutator(json), null, 2);
+      } catch (e) {
+        next = base;
+      }
+    }
+    const parts = diffLines(base, next);
+    const unified = parts.map(p => p.added ? ('+'+p.value) : p.removed ? ('-'+p.value) : '').join('');
+    fs.writeFileSync(statePath(id+'.preview.json'), JSON.stringify({ rel, base, next }, null, 2));
+    return { id, path: rel, diff: unified, base };
+  }
+
+  // apply
+  try {
+    const snap = JSON.parse(fs.readFileSync(statePath(id+'.preview.json'),'utf-8'));
+    ensureDir(abs);
+    fs.writeFileSync(abs, snap.next, 'utf-8');
+    return { ok:true };
+  } catch {
+    // fallback if apply called directly with content
+    let content = '';
+    if (act.content != null) content = act.content;
+    ensureDir(abs);
+    fs.writeFileSync(abs, content, 'utf-8');
+    return { ok:true };
+  }
+}
+```
+
+**`server/src/orchestrator/roles/tester.js`**
+
+```js
+import { spawn } from 'child_process';
+
+export async function tester({ cmd }) {
+  const allowed = new Set(['npm run build','npm run lint','npm test']);
+  if (!allowed.has(cmd)) cmd = 'npm run build';
+
+  return new Promise((resolve) => {
+    const [bin, ...args] = cmd.split(' ');
+    const child = spawn(bin, args, { cwd: process.cwd(), shell: false });
+    let out='', err='';
+    child.stdout.on('data', d => out += d.toString());
+    child.stderr.on('data', d => err += d.toString());
+    child.on('close', code => resolve({ ok: code===0, stdout: out, stderr: err }));
+  });
+}
+```
+
+**`server/src/orchestrator/roles/explainer.js`**
+
+```js
+export async function explainer({ stdout, stderr }) {
+  const raw = (stderr||stdout||'').slice(-4000);
+  const steps = [];
+  if (/Cannot find module/i.test(raw)) steps.push('Install missing dep: verify package.json and run npm i.');
+  if (/SyntaxError/i.test(raw)) steps.push('Open the file and fix the highlighted syntax token.');
+  if (/TypeError/i.test(raw)) steps.push('Check the variable/function is defined and imported.');
+
+  return {
+    text: 'Here’s what went wrong and how to fix it:',
+    steps: steps.length ? steps : ['Open the diff, accept the patch, then re-run build.']
+  };
+}
+```
+
+**`server/src/orchestrator/roles/fixer.js`**
+
+```js
+export async function fixer({ stdout, stderr }) {
+  const actions = [];
+  const msg = (stderr||stdout||'').toLowerCase();
+
+  if (msg.includes('cannot find module') && msg.includes('react-router-dom')) {
+    actions.push({
+      kind:'edit',
+      path:'client/package.json',
+      mutator: (json) => ({...json, dependencies:{...json.dependencies, "react-router-dom":"^6.26.2"}})
+    });
+  }
+  // add more heuristics as needed
+  return { actions };
+}
+```
+
+> This is intentionally **LLM-free** for v1 so it runs locally. We’ll swap the heuristics for real model calls in v2.
+
+---
+
+### 5) Client — Chat UI
+
+**`client/src/pages/Chat.jsx`**
+
+```jsx
+import React, { useEffect, useState, useRef } from 'react';
+
+export default function Chat(){
+  const [log, setLog] = useState([]);
+  const [text, setText] = useState('');
+  const [autonomy, setAutonomy] = useState(false);
+  const wsRef = useRef(null);
+
+  useEffect(() => {
+    const ws = new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host.replace(':5173',':3001')+'/api/chat/ws');
+    ws.onmessage = (e) => {
+      try { const m = JSON.parse(e.data); setLog(l => [...l, m]); } catch {}
+    };
+    wsRef.current = ws;
+    return () => ws.close();
+  }, []);
+
+  const send = (m) => wsRef.current?.send(JSON.stringify(m));
+  const ask = () => { if (!text.trim()) return; send({ type:'user', text, autonomy }); setText(''); };
+
+  return (
+    <>
+      <header>
+        <a href="/">Home</a>
+        <a href="/dev">Dev Console</a>
+        <a href="/diff">Diffs</a>
+        <a href="/chat">Chat</a>
+      </header>
+      <div style={{display:'grid', gridTemplateColumns:'1fr 320px', gap:16, padding:16, height:'calc(100vh - 56px)'}}>
+        <div style={{border:'1px solid rgba(255,255,255,0.15)', borderRadius:8, padding:12, overflowY:'auto'}}>
+          {log.map((m, i) => (
+            <div key={i} style={{margin:'8px 0', padding:'8px 10px', background:'rgba(255,255,255,0.05)', borderRadius:8}}>
+              <strong>{m.agent || m.type}</strong>
+              {m.message && <div>{m.message}</div>}
+              {m.text && <div>{m.text}</div>}
+              {m.choices && (
+                <div style={{display:'flex', gap:8, marginTop:8}}>
+                  {m.choices.map(c => <button key={c.id} className="btn" onClick={()=> send({type:'choice', id:c.id})}>{c.label}</button>)}
+                </div>
+              )}
+              {m.diff && (
+                <details style={{marginTop:8}}>
+                  <summary>Patch: {m.path}</summary>
+                  <pre style={{whiteSpace:'pre-wrap'}}>{m.diff}</pre>
+                  <button className="btn" onClick={()=> send({type:'approve_patch', patchId:m.patchId})}>Apply</button>
+                </details>
+              )}
+              {m.stdout && <details><summary>stdout</summary><pre>{m.stdout}</pre></details>}
+              {m.stderr && <details><summary>stderr</summary><pre>{m.stderr}</pre></details>}
+              {m.steps && <ol>{m.steps.map((s,idx)=><li key={idx}>{s}</li>)}</ol>}
+            </div>
+          ))}
+        </div>
+        <div style={{display:'grid', gap:8, alignContent:'start'}}>
+          <label style={{display:'flex', alignItems:'center', gap:8}}>
+            <input type="checkbox" checked={autonomy} onChange={e=>setAutonomy(e.target.checked)} />
+            Autonomy (auto-apply safe patches)
+          </label>
+          <textarea className="input" rows={6} placeholder="Describe what you want..." value={text} onChange={e=>setText(e.target.value)} />
+          <button className="btn" onClick={ask}>Send</button>
+          <div style={{opacity:.7, fontSize:12}}>Tip: try “Create a landing page and build the app.”</div>
+        </div>
+      </div>
+    </>
+  );
+}
+```
+
+**Wire the route**: in `client/src/main.jsx` add:
+
+```js
+import Chat from './pages/Chat.jsx';
+...
+{ path: '/chat', element: <Chat/> },
+```
+
+---
+
+## How to run it
+
+```bash
+# server
+cd server
+npm i
+npm run dev   # WS and HTTP on :3001
+
+# client
+cd ../client
+npm i
+npm run dev   # open http://localhost:5173/chat
+```
+
+Try: “**Create a landing page and build the app**”. You’ll see:
+
+* Planner offers **multiple-choice**.
+* Builder proposes a **patch** → approve or let autonomy apply.
+* Tester runs `npm run build`; Explainer summarizes errors; Fixer proposes follow-ups.
+
+---
+
+## What you get now
+
+* **Live chat** with streaming events.
+* **Multiple-choice questions** to steer setup.
+* **Autonomous loop** (optional) that edits, tests, explains, and fixes using your existing safe tools.
+* **Error explanations** in plain steps, automatically.
+
+## Next (fast upgrades)
+
+* Swap planner/explainer/fixer heuristics for real **LLM function-calling** (OpenAI / your provider), preserving the same tool API.
+* Add **session memory** (Redis) + vector search for your docs (“why” answers).
+* Add **role arbitration** (simple majority/weighted) if you want true multi-agent consensus.
+
+If you want, I can package this as a ready ZIP patch against your **all-in-one** repo. Just say **“ship chat patch”** and I’ll deliver the files pre-structured.

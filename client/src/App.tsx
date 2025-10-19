@@ -17,6 +17,7 @@ import Approvals from "@/pages/approvals";
 import Settings from "@/pages/settings";
 import DevConsole from "@/pages/dev-console";
 import DiffPage from "@/pages/diff";
+import Chat from "@/pages/chat";
 import NotFound from "@/pages/not-found";
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -86,6 +87,13 @@ function Router() {
         {() => (
           <DashboardLayout>
             <DiffPage />
+          </DashboardLayout>
+        )}
+      </Route>
+      <Route path="/chat">
+        {() => (
+          <DashboardLayout>
+            <Chat />
           </DashboardLayout>
         )}
       </Route>

@@ -7,6 +7,7 @@ import devRoutes from "./dev-routes";
 import approvalsRoutes from "./approvals-routes";
 import iapRoutes from "./iap/routes.real.js";
 import entitlementsRoutes from "./entitlements/routes.db.js";
+import { initChatWS } from "./chat/ws";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Mount dev console routes
@@ -172,6 +173,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+
+  // Initialize WebSocket for live chat (Sprint 4)
+  initChatWS(httpServer);
 
   return httpServer;
 }

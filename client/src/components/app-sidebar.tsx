@@ -1,4 +1,4 @@
-import { Code2, Folder, FileCheck, Settings, Sparkles, Terminal, GitCompare } from "lucide-react";
+import { Code2, Folder, FileCheck, Settings, Sparkles, Terminal, GitCompare, MessageSquare } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -36,6 +36,12 @@ const menuItems = [
     url: "/diff",
     icon: GitCompare,
     testId: "link-diff",
+  },
+  {
+    title: "AI Chat",
+    url: "/chat",
+    icon: MessageSquare,
+    testId: "link-chat",
   },
   {
     title: "Approvals",
