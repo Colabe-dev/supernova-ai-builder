@@ -1,0 +1,100 @@
+Helm chart shipped. It mirrors the K8s patch with proper templating, env-specific values, and optional ExternalSecrets.
+
+**Download:** [supernova-helm-20251019-212006.zip](sandbox:/mnt/data/supernova-helm-20251019-212006.zip)
+`sha256: 3ca3f0ff51481f142597060fd43e8564f32dcd65a5c1eb216f12c2c3e3d07a6e`
+
+## What’s inside
+
+```
+supernova-server/
+  Chart.yaml
+  values.yaml              # prod-ish defaults
+  values-dev.yaml
+  values-staging.yaml
+  values-prod.yaml
+  templates/
+    _helpers.tpl
+    deployment.yaml
+    service.yaml
+    ingress.yaml
+    hpa.yaml
+    pdb.yaml
+    networkpolicy.yaml
+    configmap-env.yaml
+    configmap-tokens.yaml  # design.tokens.json
+    secret.yaml            # disabled if externalSecrets.enabled or existingSecret set
+    externalsecret.yaml    # optional ExternalSecrets CRD
+    NOTES.txt
+```
+
+## Fast path: install to each env
+
+### Dev
+
+```bash
+helm upgrade --install supernova-dev ./supernova-server \
+  -n supernova-dev --create-namespace \
+  -f supernova-server/values-dev.yaml \
+  --set image.repository=ghcr.io/<org>/supernova-server \
+  --set image.tag=<dev-tag>
+```
+
+### Staging
+
+```bash
+helm upgrade --install supernova-staging ./supernova-server \
+  -n supernova-staging --create-namespace \
+  -f supernova-server/values-staging.yaml \
+  --set image.repository=ghcr.io/<org>/supernova-server \
+  --set image.tag=<staging-tag>
+```
+
+### Production
+
+```bash
+helm upgrade --install supernova ./supernova-server \
+  -n supernova --create-namespace \
+  -f supernova-server/values-prod.yaml \
+  --set image.repository=ghcr.io/<org>/supernova-server \
+  --set image.tag=<prod-tag>
+```
+
+## Set secrets (choose one)
+
+* **Inline (dev/staging quickstart):** edit `values-*.yaml` under `.values.secrets`.
+* **Existing Secret:** create your own Secret and use:
+
+```
+--set existingSecret=supernova-secrets
+```
+
+* **ExternalSecrets (recommended prod):**
+
+  1. Ensure `external-secrets.io` CRDs installed.
+  2. Fill `.Values.externalSecrets.secretStoreRef` and `.Values.externalSecrets.data`.
+  3. Enable:
+
+  ```
+  --set externalSecrets.enabled=true
+  ```
+
+## Customizations you’ll likely touch
+
+* `ingress.hosts`, `ingress.tls.secretName`
+* `.Values.env` (non-secret flags: `DEV_AUTH_OPEN`, rate limits, `SENTRY_ENV`)
+* `.Values.secrets` (`DATABASE_URL`, `REDIS_URL`, `AUTH_JWKS_URL`, `COLLAB_*`, IAP creds)
+* `resources`, `replicaCount`, and HPA thresholds
+
+## Sanity checks
+
+```bash
+# health
+kubectl -n supernova get pods
+kubectl -n supernova port-forward deploy/supernova-server 3001:3001 &
+curl -s http://localhost:3001/healthz
+
+# tokens (mounted from ConfigMap)
+kubectl -n supernova exec deploy/supernova-server -- cat /app/design.tokens.json
+```
+
+Need a **Helm library chart** for Collab ecosystem apps (shared labels, probes, annotations) or a **GitHub Actions release workflow** to build, push, and deploy with Helmfile? Say **“helm lib”** or **“helmfile CI”** and I’ll ship it.
