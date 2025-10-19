@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { applySecurity } from "./hardening";
+import { applyObservability, errorHandler } from "./observability/index.js";
 
 // Enable dev console features in development
 if (process.env.NODE_ENV === "development") {
@@ -13,6 +14,9 @@ const app = express();
 
 // Apply security hardening (helmet, CORS, rate limiting)
 applySecurity(app);
+
+// Apply observability (Pino logging + Sentry)
+applyObservability(app);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -50,13 +54,8 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    throw err;
-  });
+  // Use centralized error handler with Sentry integration
+  app.use(errorHandler);
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route

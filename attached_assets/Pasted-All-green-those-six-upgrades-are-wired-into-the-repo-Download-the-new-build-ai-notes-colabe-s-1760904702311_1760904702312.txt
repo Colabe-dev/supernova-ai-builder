@@ -1,0 +1,92 @@
+All green—those six upgrades are wired into the repo. 🙌
+
+[Download the new build (ai-notes-colabe-sso-sync.zip)](sandbox:/mnt/data/ai-notes-colabe-sso-sync.zip)
+
+### What I added just now
+
+1. **Real SSO/OAuth (per service)**
+
+* PKCE + discovery + secure callback:
+
+  * `/api/colabe/oauth/authorize?service=chat|automations|images|analytics|docs|payments`
+  * `/api/colabe/oauth/callback?service=…`
+* Helpers: `lib/colabeConfig.ts`, `lib/oidc.ts` (JWKS-ready).
+* Env you’ll set per service:
+
+  ```
+  COLABE_<SERVICE>_OAUTH_ISSUER=
+  COLABE_<SERVICE>_OAUTH_CLIENT_ID=
+  COLABE_<SERVICE>_OAUTH_CLIENT_SECRET=
+  COLABE_OAUTH_REDIRECT_BASE=   # fallback: NEXT_PUBLIC_APP_URL
+  ```
+
+2. **Service-specific UIs embedded**
+
+* Pages:
+
+  * `/ecosystem/chat`
+  * `/ecosystem/images`
+  * `/ecosystem/automations`
+* Each embeds the configured service URL (set `COLABE_SERVICE_*_URL`).
+
+3. **Billing bundles → Colabe Payments**
+
+* Checkout hits the existing payments proxy and creates a **pending** sub; on webhook it flips to **active/canceled**.
+
+  * API: `/api/colabe/bundle/checkout` (kind: `bundle`)
+  * Webhook: `/api/payments/webhook` now syncs `bundle_subscriptions`
+
+4. **Service Registry sync (no more hardcoding)**
+
+* API: `/api/colabe/registry/sync` pulls JSON from `COLABE_SERVICE_REGISTRY_URL` and upserts `bundle_plans`.
+
+5. **Usage metering & analytics**
+
+* SQL view: `daily_metrics` over `colabe_events`.
+* API: `/api/metrics/daily`
+* UI: `/ecosystem/analytics` (chart using Recharts).
+
+6. **Fine-grained scopes**
+
+* `integrations.scopes` now stores granted scopes (shown in UI, ready to enforce in feature routes).
+
+---
+
+### Configure it (quick checklist)
+
+1. **Env** (per service + registry)
+
+```
+# OAuth per service
+COLABE_CHAT_OAUTH_ISSUER=
+COLABE_CHAT_OAUTH_CLIENT_ID=
+COLABE_CHAT_OAUTH_CLIENT_SECRET=
+# ... also for AUTOMATIONS, IMAGES, ANALYTICS, DOCS, PAYMENTS
+
+COLABE_OAUTH_REDIRECT_BASE=http://localhost:3000
+
+# Service base URLs to embed/ping
+COLABE_SERVICE_CHAT_URL=
+COLABE_SERVICE_AUTOMATIONS_URL=
+COLABE_SERVICE_IMAGES_URL=
+COLABE_SERVICE_ANALYTICS_URL=
+COLABE_SERVICE_DOCS_URL=
+COLABE_SERVICE_PAYMENTS_URL=
+
+# Registry
+COLABE_SERVICE_REGISTRY_URL=
+```
+
+2. **DB**
+
+* Re-run `supabase/schema.sql` to create `daily_metrics` view (and previous ecosystem tables if not already).
+
+3. **Use it**
+
+* Go to **/ecosystem** and click **Link workspace** (or hit `/api/colabe/oauth/authorize?service=chat` to test the OAuth flow).
+* Open **/bundles** to try bundle checkout.
+* See **/ecosystem/analytics** for daily events.
+
+---
+
+If you share your **exact registry JSON** (and any OAuth issuer endpoints), I can pre-populate the repo with a `dev.env.local` example and a seed script so your whole ecosystem lights up out of the box.
