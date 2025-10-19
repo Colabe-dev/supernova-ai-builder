@@ -1,0 +1,63 @@
+Here’s the move, ranked by ROI and dependency order — and I already executed Step 1 for you.
+
+# Recommended plan
+
+1. **Apply lib to server chart (do now)** — standardize templates across services, cut drift, and make future platform-wide changes one-liners.
+   → I’ve shipped a ready patch you can drop in immediately.
+
+2. **Update the production runbook** — add Helm/Helmfile sections (dev → staging → prod), rollback tactics, and secrets posture (ExternalSecrets + OIDC to cluster). I’ll deliver this right after you apply Step 1 so examples match your chart exactly.
+
+3. **Create CI/CD deployment docs** — single source of truth: build tags, branch→env mapping, promotion flow, and incident/rollback playbooks aligned with the Helmfile workflows you have.
+
+If you want me to proceed hands-off, I’ll execute 2 and 3 next. For now, apply the refactor:
+
+---
+
+# Step 1 — Apply lib to server chart (already shipped)
+
+**Download:** [supernova-helm-apply-lib-patch-20251019-215545.zip](sandbox:/mnt/data/supernova-helm-apply-lib-patch-20251019-215545.zip)
+`sha256: c8a3c07e123c0c3c4a69abd88498887dbf0bc13848e445568fd97cb0872272d4`
+
+## How to apply (exact)
+
+```bash
+# Put the chart in your repo (replace/merge your current chart):
+unzip supernova-helm-apply-lib-patch-20251019-215545.zip
+
+# Build dependencies (lib is vendored under supernova-server/charts/collab-lib)
+helm dependency build supernova-server
+
+# Dry-run
+helm upgrade --install supernova ./supernova-server -n supernova \
+  --create-namespace \
+  -f supernova-server/values-prod.yaml \
+  --set image.repository=ghcr.io/<org>/supernova-server \
+  --set image.tag=<tag> \
+  --dry-run
+
+# Apply
+helm upgrade --install supernova ./supernova-server -n supernova \
+  -f supernova-server/values-prod.yaml \
+  --set image.repository=ghcr.io/<org>/supernova-server \
+  --set image.tag=<tag>
+```
+
+**What changed**
+
+* `supernova-server/templates/stack.yaml` now calls the **collab-lib** macros to render Deployment, Service, Ingress, HPA, PDB, NetworkPolicy.
+* `Chart.yaml` adds a dependency: `repository: file://charts/collab-lib` (vendored).
+* Existing `configmap-env.yaml`, `configmap-tokens.yaml`, `secret.yaml`, `externalsecret.yaml` remain intact.
+* No values changes required; your existing `values-*.yaml` still work.
+
+**Sanity**
+
+```bash
+kubectl -n supernova get deploy/supernova-server
+kubectl -n supernova describe deploy/supernova-server | grep -E "Image:|EnvFrom|design.tokens.json"
+kubectl -n supernova exec deploy/supernova-server -- cat /app/design.tokens.json
+```
+
+---
+
+If you say **“runbook update”**, I’ll deliver the production runbook with Helm/Helmfile flow and rollbacks.
+If you say **“CI/CD docs”**, I’ll ship the end-to-end pipeline docs that match your current Actions + Helmfile.
