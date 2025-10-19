@@ -4,9 +4,9 @@
 Supernova is an intelligent application builder platform that uses AI-powered agents (Planner, Implementer, Tester, Fixer) to scaffold, build, and deploy web and mobile applications. The platform emphasizes generating production-ready code with an approvals workflow for reviewing changes. Its business vision is to streamline app development through AI, offering a robust tool for creating web and mobile applications with a focus on high-quality frontend and design.
 
 ## Recent Changes
-- **2025-10-19 (Sprint 4 Security Pro + Extras)**: Complete Security Stack ✅ **PRODUCTION-READY**
+- **2025-10-19 (Sprint 4 Security Pro - Final)**: Complete Security Stack ✅ **PRODUCTION-READY**
   - ✅ **Security Pro**: JWKS-based JWT verification with role-based access control (RBAC)
-  - ✅ **JWKS Endpoint**: GET /auth/.well-known/jwks.json for token verification
+  - ✅ **JWKS Endpoint**: GET /auth/.well-known/jwks.json serves real public keys from jwks.json
   - ✅ **Auth Middleware**: parseAuthJwks (token parsing), requireAuth (RBAC enforcement)
   - ✅ **Auth Issuer**: Self-hosted JWT minting with RS256 signing (POST /auth/token)
   - ✅ **Redis Rate Limiting**: Production-grade rate limiter supporting single/Sentinel/Cluster configurations
@@ -14,10 +14,12 @@ Supernova is an intelligent application builder platform that uses AI-powered ag
   - ✅ **Request Signing**: HMAC-based request signatures for zero-trust architectures (signature parsing bug fixed)
   - ✅ **Packages**: jose (JWT), ioredis (Redis Cluster/Sentinel)
   - ✅ **Files**: server/auth/verify.js, server/auth/jwks/publish.js, server/auth/issuer/index.js, server/rateLimit/index.js+pro.js, server/mtls/*
-  - ✅ **Tools**: tools/mint-jwt.mjs (CLI token generator), tools/gencerts.sh (dev CA/cert generator), tools/auto-integrate-security.mjs
+  - ✅ **Tools**: tools/gen-jwks.mjs (RS256 keypair generator), tools/mint-jwt.mjs (CLI token generator), tools/gencerts.sh (dev CA/cert generator)
+  - ✅ **JWKS Generator**: Automated tool creates server/auth/jwks/keys/<kid>/{private.pem,public.pem} + jwks.json
+  - ✅ **Production Runbook**: SECURITY_PRODUCTION_RUNBOOK.md with complete deployment & validation procedures
   - ✅ **Configuration**: AUTH_JWKS_URL, AUTH_ISSUER, AUTH_AUDIENCE, DEV_AUTH_OPEN, REDIS_URL/SENTINEL/CLUSTER, TLS_CA/KEY/CERT
   - ✅ **Dev Mode**: DEV_AUTH_OPEN=true bypasses authentication for local development
-  - ⚠️ **Note**: JWKS endpoint returns empty keys by default; populate with real keys for production token verification
+  - ✅ **E2E Verified**: JWKS generation → token minting → JWT verification → RBAC enforcement all tested
 
 - **2025-10-19 (Sprint 4 Add-ons - Postgres Migration)**: Postgres-Backed Entitlements + Multi-Channel Deployment ✅ **PRODUCTION-READY**
   - ✅ **Postgres Database**: Migrated from in-memory to Replit Postgres with transactional integrity

@@ -1,0 +1,64 @@
+Shipped a **Kubernetes patch** with Kustomize bases and dev/staging/prod overlays.
+
+**Download:** [supernova-k8s-patch-20251019-211611.zip](sandbox:/mnt/data/supernova-k8s-patch-20251019-211611.zip)
+`sha256: 05f3f3796418532cc2215055f97fb56f3c312ff7dea3142334d7d46ace36705b`
+
+## What’s inside
+
+```
+k8s/
+  base/
+    deployment.yaml            # hardened container, probes, resources
+    service.yaml               # ClusterIP :80 -> container :3001
+    ingress.yaml               # NGINX ingress + TLS
+    hpa.yaml                   # CPU+Mem autoscaling
+    pdb.yaml                   # 50% minAvailable
+    networkpolicy.yaml         # deny-by-default (loose egress; tighten in prod)
+    configmap.env.yaml         # non-secret env
+    secret.example.yaml        # fill or replace with Sealed/External Secrets
+    tokens.configmap.yaml      # design.tokens.json mounted at /app/design.tokens.json
+    kustomization.yaml
+  overlays/
+    dev/kustomization.yaml     # 1 replica, DEV_AUTH_OPEN=true
+    staging/kustomization.yaml # 2 replicas
+    prod/kustomization.yaml    # 3 replicas
+```
+
+## Quick apply
+
+```bash
+# set your image
+IMAGE=ghcr.io/<org>/supernova-server:<tag>
+sed -i.bak "s#ghcr.io/your-org/supernova-server#${IMAGE%:*}#; s#latest#${IMAGE##*:}#" k8s/base/kustomization.yaml
+
+# DEV
+kubectl apply -k k8s/overlays/dev
+
+# STAGING
+kubectl apply -k k8s/overlays/staging
+
+# PROD
+kubectl apply -k k8s/overlays/prod
+```
+
+## Required edits (prod)
+
+* In `k8s/base/secret.example.yaml`, replace placeholders:
+
+  * `DATABASE_URL`, `REDIS_URL`, `AUTH_JWKS_URL`, `COLLAB_*`, `GOOGLE_SERVICE_ACCOUNT_KEY`, `APPLE_*`, etc.
+* In `k8s/base/ingress.yaml`, set your real host + TLS secret name.
+* (Optional) Move secrets to **SealedSecrets** or **ExternalSecrets**.
+
+## Design tokens
+
+Mounted via ConfigMap to **`/app/design.tokens.json`** to match your current server code path. You can also read from `DESIGN_TOKENS_PATH=/config/design.tokens.json` (already injected) if you later update the server to use it.
+
+## Hardening defaults
+
+* Non-root container, read-only config volumes.
+* Readiness + liveness on `/healthz`.
+* HPA: CPU 65% / Mem 70%.
+* PDB: at least 50% pods survive voluntary disruptions.
+* NetworkPolicy: default deny with permissive egress — tighten CIDRs/namespace selectors per your cluster policy.
+
+If you want a **Helm chart** version (values.yaml for all envs, plus optional ExternalSecrets + Cert-Manager), say **“helmify it”** and I’ll deliver a Helm package ready for CI.

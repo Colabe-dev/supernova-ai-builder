@@ -1,0 +1,193 @@
+Locked. Here’s the precise, production-grade runbook to finish your security stack and validate it end-to-end.
+
+# 1) Generate + publish JWKS (production)
+
+**Option A — using the shipped tool (recommended)**
+
+```bash
+# from repo root
+node tools/gen-jwks.mjs
+git add server/auth/jwks/keys && git commit -m "rotate jwks"
+```
+
+This creates `server/auth/jwks/keys/<kid>/{private.pem,public.pem}` and updates `server/auth/jwks/keys/jwks.json`.
+
+**Option B — OpenSSL folder (if you prefer)**
+
+```bash
+mkdir -p server/auth/jwks/keys/$(date +%s)
+# (you can still run `tools/gen-jwks.mjs` later to populate jwks.json)
+```
+
+**Configure**
+
+```
+AUTH_JWKS_URL=https://<api-domain>/auth/.well-known/jwks.json
+AUTH_ISSUER=https://collab.supernova.auth
+AUTH_AUDIENCE=supernova-api
+DEV_AUTH_OPEN=false
+```
+
+**Smoke test JWKS**
+
+```bash
+curl -s https://<api-domain>/auth/.well-known/jwks.json | jq .
+```
+
+**Mint an admin token (two ways)**
+
+* REST:
+
+```bash
+export ISSUER_ADMIN_SECRET='<random>'
+curl -s -X POST https://<api-domain>/auth/token \
+  -H "x-issuer-secret: $ISSUER_ADMIN_SECRET" \
+  -H "content-type: application/json" \
+  -d '{"sub":"u1","roles":["admin","finance"],"ttl":3600}' | jq -r .token
+```
+
+* CLI:
+
+```bash
+node tools/mint-jwt.mjs --sub u1 --roles admin,finance --ttl 3600
+```
+
+**Verify API auth path**
+
+```bash
+# should be 401/403 without token
+curl -i https://<api-domain>/api/entitlements/u1
+
+# should be 200 with admin token
+export JWT='<paste>'
+curl -s -H "authorization: Bearer $JWT" https://<api-domain>/api/entitlements/u1 | jq .
+```
+
+# 2) Enable Redis rate limiting (production)
+
+**Pick one**
+
+```
+# Single node
+REDIS_URL=redis://your-redis-host:6379
+
+# OR Sentinel
+REDIS_SENTINEL=host1:26379,host2:26379
+REDIS_MASTER=mymaster
+
+# OR Cluster
+REDIS_CLUSTER_NODES=host1:6379,host2:6379,host3:6379
+```
+
+**Tune limits (optional)**
+
+```
+RATE_LIMIT_WINDOW_MS=60000
+RATE_LIMIT_READ_MAX=120
+RATE_LIMIT_WRITE_MAX=30
+RATE_LIMIT_WEBHOOK_MAX=1200
+```
+
+**Load test the limiter**
+
+```bash
+# 140 reads in a minute; expect some 429s after the cap
+for i in {1..140}; do
+  curl -s -o /dev/null -w "%{http_code}\n" \
+    -H "authorization: Bearer $JWT" \
+    https://<api-domain>/api/entitlements/u1
+done | sort | uniq -c
+```
+
+# 3) Lock production auth
+
+```
+DEV_AUTH_OPEN=false                 # enforce JWT
+ISSUER_ADMIN_SECRET=<strong-secret> # protects /auth/token issuing
+```
+
+**Expectation checks**
+
+* Requests **without** `Authorization: Bearer ...` ⇒ `401/403`.
+* Requests **with** valid JWT from your JWKS issuer, `iss=AUTH_ISSUER`, `aud=AUTH_AUDIENCE` ⇒ **200**.
+* Role gating:
+
+  * `GET /api/entitlements/:profileId` ⇒ self or role in `{admin,finance}`.
+  * `POST /api/entitlements/grant` ⇒ role in `{admin,finance}` only.
+
+# 4) End-to-end production smoke (copy/paste)
+
+```bash
+# health
+curl -s https://<api-domain>/healthz | jq .
+
+# jwks
+curl -s https://<api-domain>/auth/.well-known/jwks.json | jq .
+
+# entitlements read (authed)
+curl -s -H "authorization: Bearer $JWT" https://<api-domain>/api/entitlements/u1 | jq .
+
+# write path (admin only)
+curl -s -X POST https://<api-domain>/api/entitlements/grant \
+  -H "authorization: Bearer $JWT" -H "content-type: application/json" \
+  -d '{"profileId":"u1","grant":{"type":"coins","amount":100,"reason":"prod-smoke"},"externalRef":"smoke-001"}' | jq .
+
+# idempotency (same externalRef ⇒ no double credit)
+curl -s -X POST https://<api-domain>/api/entitlements/grant \
+  -H "authorization: Bearer $JWT" -H "content-type: application/json" \
+  -d '{"profileId":"u1","grant":{"type":"coins","amount":100,"reason":"prod-smoke"},"externalRef":"smoke-001"}' | jq .
+```
+
+# 5) IAP strict (when ready)
+
+```
+IAP_STRICT=true
+GOOGLE_SERVICE_ACCOUNT_KEY=<one-line JSON>
+GOOGLE_PACKAGE_NAME=com.collab.supernova
+APPLE_BUNDLE_ID=com.collab.supernova
+IAP_USE_SANDBOX=false   # in prod
+```
+
+**Sanity**
+
+```bash
+# Google product/subscription
+curl -s -X POST https://<api-domain>/api/iap/google/verify \
+  -H 'content-type: application/json' \
+  -d '{"profileId":"u1","productId":"coins.100","purchaseToken":"<real-token>","packageName":"com.collab.supernova","grant":{"type":"coins","amount":1000}}' | jq .
+
+# Apple StoreKit 2
+curl -s -X POST https://<api-domain>/api/iap/apple/verify \
+  -H 'content-type: application/json' \
+  -d '{"profileId":"u1","signedPayload":"<JWS>","grant":{"type":"subscription","plan":"pro_monthly"}}' | jq .
+```
+
+# 6) Observability must-haves
+
+```
+SENTRY_DSN=<dsn>
+SENTRY_ENV=production
+LOG_LEVEL=info
+```
+
+* Validate: a forced 500 should appear in Sentry; Pino logs include request IDs.
+* Add an alert on 429 spikes (rate-limit) and on IAP 402/400 anomalies.
+
+# 7) Rollback & escape hatches
+
+* Auth soft switch (last resort): `DEV_AUTH_OPEN=true` (only for emergency; revert quickly).
+* Limiting: unset Redis envs ⇒ in-memory fallback (single instance) to remove Redis from the blast radius.
+* Keys: if a key is compromised, run `node tools/gen-jwks.mjs` to rotate (new `kid`), redeploy issuer and verifier (JWKS served immediately).
+
+# 8) Deployment checklist (short)
+
+* [ ] `DATABASE_URL` points to prod Postgres; migrations applied.
+* [ ] JWKS endpoint reachable publicly; caches (CDN) set ≤ 5 minutes.
+* [ ] Redis reachable from API pods; security groups allow traffic.
+* [ ] Secrets in your secret manager (not `.env` files in containers).
+* [ ] CI/CD masks `ISSUER_ADMIN_SECRET`, IAP secrets, DB creds.
+* [ ] WAF/Ingress forwards `Authorization` header intact.
+
+---
+
+If you want, I can also provide a **Kubernetes manifest patch** (Deployment + ConfigMap + Secret + HPA) pre-wired for these envs and liveness probes. Just say: **“k8s patch”**.
