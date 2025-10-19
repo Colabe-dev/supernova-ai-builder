@@ -4,6 +4,17 @@
 Supernova is an intelligent application builder platform that uses AI-powered agents (Planner, Implementer, Tester, Fixer) to scaffold, build, and deploy web and mobile applications. The platform emphasizes generating production-ready code with an approvals workflow for reviewing changes. Its business vision is to streamline app development through AI, offering a robust tool for creating web and mobile applications with a focus on high-quality frontend and design.
 
 ## Recent Changes
+- **2025-10-19 (Sprint 4 Security Extras)**: Advanced Security Overlays ✅ **READY FOR PRODUCTION**
+  - ✅ **Auth Issuer**: Self-hosted JWT minting with RS256 signing (POST /auth/token)
+  - ✅ **Redis Rate Limiting**: Production-grade rate limiter supporting single/Sentinel/Cluster configurations
+  - ✅ **mTLS Support**: Mutual TLS for internal service-to-service authentication
+  - ✅ **Request Signing**: HMAC-based request signatures for zero-trust architectures
+  - ✅ **Packages**: jose (JWT), ioredis (Redis Cluster/Sentinel)
+  - ✅ **Files**: server/auth/issuer/index.js, server/rateLimit/pro.js, server/mtls/* (server.js, middleware.js, signature.js)
+  - ✅ **Tools**: tools/mint-jwt.mjs (CLI token generator), tools/gencerts.sh (dev CA/cert generator)
+  - ✅ **Configuration**: AUTH_ISSUER, AUTH_AUDIENCE, REDIS_URL/SENTINEL/CLUSTER, TLS_CA/KEY/CERT
+  - ⚠️ **Note**: Requires JWKS key generation (tools/gen-jwks.mjs from Security Pro overlay) before using Auth Issuer
+
 - **2025-10-19 (Sprint 4 Add-ons - Postgres Migration)**: Postgres-Backed Entitlements + Multi-Channel Deployment ✅ **PRODUCTION-READY**
   - ✅ **Postgres Database**: Migrated from in-memory to Replit Postgres with transactional integrity
   - ✅ **Database Schema**: ent_balances (current state), ent_ledger (append-only log), ent_subscriptions (lifecycle tracking)
