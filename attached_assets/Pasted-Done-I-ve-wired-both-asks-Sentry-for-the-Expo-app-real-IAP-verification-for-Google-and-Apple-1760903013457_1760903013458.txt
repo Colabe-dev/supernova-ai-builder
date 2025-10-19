@@ -1,0 +1,122 @@
+Done. I’ve wired **both** asks: Sentry for the Expo app + real IAP verification for Google and Apple.
+
+**Download (overlay ZIP):**
+[supernova-s4-mobile-sentry-iap-20251019-194239.zip](sandbox:/mnt/data/supernova-s4-mobile-sentry-iap-20251019-194239.zip)
+`sha256: f9baaad116df8fd027372a44411f1674c72deb2233be520cf2b711b27d627939`
+
+## What you just got
+
+### Mobile: Sentry for Expo
+
+* `mobile-expo/app.config.js` – enables `sentry-expo` plugin + injects public env.
+* `mobile-expo/src/sentry.ts` – one-line init (reads `EXPO_PUBLIC_SENTRY_*`).
+* Bring your DSN via EAS/GitHub env:
+  `EXPO_PUBLIC_SENTRY_DSN`, `EXPO_PUBLIC_SENTRY_ENV`, `EXPO_PUBLIC_SENTRY_TRACES`.
+
+### Server: Real IAP verification
+
+* `server/iap/google.real.js` — uses `googleapis` Android Publisher v3:
+
+  * Validates **products** and **subscriptions**.
+  * Requires `GOOGLE_SERVICE_ACCOUNT_KEY` (JSON string), `GOOGLE_PACKAGE_NAME`.
+
+* `server/iap/apple.real.js` — verifies **StoreKit 2 `signedPayload`** with Apple JWKS via `jose`:
+
+  * Optional legacy `verifyReceipt` fallback (`APPLE_SHARED_SECRET`).
+  * Optional bundleId check via `APPLE_BUNDLE_ID`.
+
+* `server/iap/routes.real.js` — Express routes using the real adapters.
+
+* `env/.env.sample.append` — keys to add.
+
+## Install & Wire (precise)
+
+### 1) Packages
+
+```bash
+# server
+npm i googleapis jose undici
+
+# mobile
+cd mobile-expo
+npm i sentry-expo
+```
+
+### 2) Server wiring
+
+```js
+// server/index.js
+import iapRoutes from "./iap/routes.real.js";
+app.use("/api/iap", iapRoutes);
+```
+
+### 3) Mobile wiring
+
+* Switch to `app.config.js` (included). Remove/ignore `app.json` if both exist.
+* In your app entry (e.g., `mobile-expo/src/App.tsx`), import once:
+
+```ts
+import "./sentry";
+```
+
+### 4) Environment
+
+```
+# Expo (EAS/GitHub/EAS secrets)
+EXPO_PUBLIC_SENTRY_DSN=https://<your_dsn>
+EXPO_PUBLIC_SENTRY_ENV=preview
+EXPO_PUBLIC_SENTRY_TRACES=0.1
+EXPO_PUBLIC_API_BASE=https://<dev-api>
+
+# IAP strict verification (server)
+IAP_STRICT=true
+GOOGLE_SERVICE_ACCOUNT_KEY={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n","client_email":"...","client_id":"..."}
+GOOGLE_PACKAGE_NAME=com.collab.supernova
+APPLE_BUNDLE_ID=com.collab.supernova
+IAP_USE_SANDBOX=true
+APPLE_SHARED_SECRET=
+```
+
+## Sanity Tests (10 min)
+
+### Google (product)
+
+```bash
+curl -X POST http://localhost:3001/api/iap/google/verify \
+  -H 'content-type: application/json' \
+  -d '{
+    "profileId":"u1",
+    "productId":"coins.100",
+    "purchaseToken":"<android-token>",
+    "packageName":"com.collab.supernova",
+    "grant":{"type":"coins","amount":1000}
+  }'
+```
+
+Expect `{ ok: true, collab: ... }` when valid.
+
+### Apple (StoreKit 2)
+
+```bash
+curl -X POST http://localhost:3001/api/iap/apple/verify \
+  -H 'content-type: application/json' \
+  -d '{
+    "profileId":"u1",
+    "signedPayload":"<JWS from StoreKit 2>",
+    "grant":{"type":"subscription","plan":"pro_monthly"}
+  }'
+```
+
+## Notes / Guardrails
+
+* **Production:** keep `IAP_STRICT=true`. In dev sandboxes you can still test with real credentials.
+* **Security:** store `GOOGLE_SERVICE_ACCOUNT_KEY` as a single JSON secret in GitHub Actions or your secret manager.
+* **Apple legacy verifyReceipt** is provided only as a fallback for older clients; prefer `signedPayload`.
+
+If you want me to also:
+
+* add **client-side purchase flows** (Expo In-App Purchases bridge + entitlement refresh),
+* include **Sentry sourcemap upload** for mobile builds in CI,
+* or enforce **webhook-driven entitlements** for Collab Pay,
+
+say “**iap client**”, “**sentry mobile ci**”, or “**entitlements webhooks**” and I’ll ship the corresponding overlay.
