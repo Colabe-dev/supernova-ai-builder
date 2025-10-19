@@ -1,0 +1,21 @@
+name: Mobile — OTA Update
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '18' }
+      - name: Install EAS
+        run: npm i -g eas-cli
+      - name: OTA update (preview channel)
+        env:
+          EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+        run: |
+          cd mobile-expo
+          eas update --branch preview --message "CI: preview update" --non-interactive

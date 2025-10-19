@@ -5,12 +5,15 @@ import { insertProjectSchema, insertAgentRunSchema } from "@shared/schema";
 import { runAgent, generateMockCodeChanges } from "./agents";
 import devRoutes from "./dev-routes";
 import approvalsRoutes from "./approvals-routes";
+import iapRoutes from "./iap/routes.real.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Mount dev console routes
   app.use("/api", devRoutes);
   // Mount approvals routes (Sprint 3)
   app.use("/api", approvalsRoutes);
+  // Mount IAP routes (Sprint 4)
+  app.use("/api/iap", iapRoutes);
   app.get("/api/projects", async (req, res) => {
     try {
       const projects = await storage.getProjects();

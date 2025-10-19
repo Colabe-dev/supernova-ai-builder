@@ -1,0 +1,13 @@
+{
+  "title": "Supernova \u2014 Build apps at light speed",
+  "shortDescription": "Design, build, and ship web & mobile apps with AI governance.",
+  "fullDescription": "Supernova helps teams design, build, and ship cross-platform apps with approvals, diffs, and OTA updates.",
+  "video": "",
+  "graphics": {
+    "screenshots": [
+      "./store/play/screenshots/phone_1.png"
+    ],
+    "icon": "./mobile-expo/assets/icon.png",
+    "featureGraphic": "./store/play/featureGraphic.png"
+  }
+}
