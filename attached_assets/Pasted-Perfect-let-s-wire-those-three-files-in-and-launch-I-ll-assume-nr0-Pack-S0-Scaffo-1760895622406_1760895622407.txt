@@ -1,0 +1,133 @@
+Perfect — let’s wire those three files in and launch.
+
+I’ll assume:
+
+* **nr0** = Pack **S0** (Scaffolder)
+* **nr01** = Pack **S1** (Autonomy Loop)
+* **nr02** = Pack **S2** (Dev Console & Design Mode)
+
+If unsure, see the quick ID rules in step 2.
+
+# Runbook (exact order)
+
+## 1) Put the ZIPs at repo root (Replit “Files” panel)
+
+You should see:
+
+```
+nr0.zip
+nr01.zip
+nr02.zip
+```
+
+## 2) Identify which is which (quick check)
+
+From the Replit shell:
+
+```bash
+unzip -l nr0.zip  | head -n 20
+unzip -l nr01.zip | head -n 20
+unzip -l nr02.zip | head -n 20
+```
+
+* The one that lists `cli/supernova-scaffold.mjs` = **S0**
+* The one that lists `agent-runner/runner.mjs` = **S1**
+* The one that lists `templates/web-next/app/api/dev/fs/route.ts` = **S2**
+
+## 3) Extract **in order** (overlays rely on this)
+
+```bash
+unzip -o nr0.zip  -d .
+unzip -o nr01.zip -d .
+unzip -o nr02.zip -d .
+```
+
+After this, you should have these paths:
+
+```
+cli/supernova-scaffold.mjs
+templates/web-next/...
+templates/mobile-expo/...
+agent-runner/runner.mjs
+src/infra/supabase/schema.sql
+```
+
+## 4) Create your project spec
+
+```bash
+cp examples/supernova.basic.json project.json
+# Then edit project.json in Replit to fill your env placeholders
+```
+
+## 5) Scaffold targets (to ./out)
+
+```bash
+node ./cli/supernova-scaffold.mjs --spec ./project.json --out ./out
+```
+
+You should now have:
+
+```
+out/web-next/...
+out/mobile-expo/...
+```
+
+## 6) Web app env + run
+
+```bash
+cd out/web-next
+cp .env.example .env.local
+echo DEV_FS_ENABLE=true >> .env.local   # enables /dev file editor locally
+npm i
+npm run dev
+```
+
+Open the web preview:
+
+* `/` home (Payments & Chat cards)
+* `/dev` (file tree + editor + design mode)
+* `/diff`
+* `/approvals`
+
+## 7) Mobile app (optional now)
+
+```bash
+cd ../mobile-expo
+cp .env.example .env
+npm i
+npm start
+```
+
+Press **i** (iOS sim) / **a** (Android emu) or scan the QR.
+
+## 8) Autonomy loop (planner → implementer → tester → fixer)
+
+From the repo root:
+
+```bash
+node ./agent-runner/runner.mjs --project ./out --mode auto
+```
+
+Then in the web app:
+
+* Go to **/diff** and submit a diff (or edit a file in **/dev** and save, then submit).
+* Go to **/approvals** and **Approve** the pending item.
+
+---
+
+## Quick health checks
+
+* `cli/supernova-scaffold.mjs` exists and runs without errors.
+* Web loads: `/`, `/dev`, `/diff`, `/approvals`.
+* Saving a file in `/dev` doesn’t crash; a diff appears in `/diff`.
+* Approvals POST returns 200 and the item disappears after approval.
+
+## If something looks off
+
+* “Zip imported but folders are empty”: run extraction again:
+
+  ```bash
+  unzip -o nr0.zip -d . && unzip -o nr01.zip -d . && unzip -o nr02.zip -d .
+  ```
+* “Not sure which pack is which”: use the **ID check** in step 2.
+* If Replit still misbehaves with ZIPs, I can push the **core files** directly (Option 2) or ship a **fresh fullstack repo** (Option 3). Just say which you want.
