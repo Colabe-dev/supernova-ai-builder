@@ -118,15 +118,20 @@ function App() {
     // Listen for token updates via SSE
     const eventSource = new EventSource("/api/dev/preview/stream");
     
-    eventSource.addEventListener("tokensUpdated", async () => {
+    eventSource.onmessage = async (event) => {
       try {
-        const response = await fetch("/api/design/tokens");
-        const tokens = await response.json();
-        applyTokens(tokens);
+        const payload = JSON.parse(event.data);
+        
+        if (payload.type === "tokensUpdated") {
+          const response = await fetch("/api/design/tokens");
+          const tokens = await response.json();
+          applyTokens(tokens);
+          console.log("Design tokens reloaded and applied");
+        }
       } catch (error) {
-        console.warn("Failed to reload design tokens:", error);
+        console.warn("Failed to process SSE event:", error);
       }
-    });
+    };
 
     return () => eventSource.close();
   }, []);
