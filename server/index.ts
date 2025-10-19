@@ -3,7 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { applySecurity } from "./hardening";
 import { applyObservability, errorHandler } from "./observability/index.js";
-import webhooksRouter from "./webhooks.js";
+import webhooksRouter from "./entitlements/webhooks.db.js";
 
 // Enable dev console features in development
 if (process.env.NODE_ENV === "development") {

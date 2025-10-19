@@ -6,7 +6,7 @@ import { runAgent, generateMockCodeChanges } from "./agents";
 import devRoutes from "./dev-routes";
 import approvalsRoutes from "./approvals-routes";
 import iapRoutes from "./iap/routes.real.js";
-import entitlementsRoutes from "./entitlements/routes.js";
+import entitlementsRoutes from "./entitlements/routes.db.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Mount dev console routes
