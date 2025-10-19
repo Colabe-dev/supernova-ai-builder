@@ -13,6 +13,8 @@ import ProjectDetail from "@/pages/project-detail";
 import Templates from "@/pages/templates";
 import Approvals from "@/pages/approvals";
 import Settings from "@/pages/settings";
+import DevConsole from "@/pages/dev-console";
+import DiffPage from "@/pages/diff";
 import NotFound from "@/pages/not-found";
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -68,6 +70,20 @@ function Router() {
         {() => (
           <DashboardLayout>
             <Settings />
+          </DashboardLayout>
+        )}
+      </Route>
+      <Route path="/dev">
+        {() => (
+          <DashboardLayout>
+            <DevConsole />
+          </DashboardLayout>
+        )}
+      </Route>
+      <Route path="/diff">
+        {() => (
+          <DashboardLayout>
+            <DiffPage />
           </DashboardLayout>
         )}
       </Route>

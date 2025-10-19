@@ -3,8 +3,11 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertProjectSchema, insertAgentRunSchema } from "@shared/schema";
 import { runAgent, generateMockCodeChanges } from "./agents";
+import devRoutes from "./dev-routes";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Mount dev console routes
+  app.use("/api", devRoutes);
   app.get("/api/projects", async (req, res) => {
     try {
       const projects = await storage.getProjects();

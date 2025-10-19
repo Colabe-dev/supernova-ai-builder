@@ -1,4 +1,4 @@
-import { Code2, Folder, FileCheck, Settings, Sparkles } from "lucide-react";
+import { Code2, Folder, FileCheck, Settings, Sparkles, Terminal, GitCompare } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -24,6 +24,18 @@ const menuItems = [
     url: "/templates",
     icon: Code2,
     testId: "link-templates",
+  },
+  {
+    title: "Dev Console",
+    url: "/dev",
+    icon: Terminal,
+    testId: "link-dev",
+  },
+  {
+    title: "Diffs",
+    url: "/diff",
+    icon: GitCompare,
+    testId: "link-diff",
   },
   {
     title: "Approvals",

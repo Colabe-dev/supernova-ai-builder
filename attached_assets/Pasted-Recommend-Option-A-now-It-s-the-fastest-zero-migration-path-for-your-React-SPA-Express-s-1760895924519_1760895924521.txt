@@ -1,0 +1,384 @@
+Recommend **Option A** now. It’s the fastest, zero-migration path for your **React SPA + Express** stack. We can always layer Option C pieces later and keep Option B (pack system) as a future migration.
+
+Below is a tight, production-minded spec + minimal code you can drop in.
+
+# Option A — S2 features for your React SPA + Express
+
+## What you’re adding
+
+1. **/dev** page
+
+   * File tree (whitelisted dirs), code editor, live preview refresher, terminal pane, and **Design Mode** panel.
+2. **/diff** page
+
+   * Lists diffs captured on every save; view unified diffs; (optional) “Submit for approval” hook.
+3. **Backend APIs** (Express)
+
+   * `GET /api/dev/fs?path=…` → list or read file
+   * `POST /api/dev/fs { path, content }` → write file + record diff
+   * `POST /api/dev/terminal { cmd }` → run **whitelisted** command; stream logs
+   * `GET/POST /api/design/tokens` → read/write design tokens JSON
+4. **Design tokens store**
+
+   * `design.tokens.json` at repo root; tokens become CSS variables in the SPA.
+
+## Guardrails (enable only in dev)
+
+* `DEV_FS_ENABLE=true` to allow FS read/write
+* `DEV_TERMINAL_ENABLE=true` to allow terminal runs
+* Path allow-list: `["src","public","scripts"]` (customize)
+* No `..` traversal; JSON responses only; **rate-limit** (e.g., 30 req/min)
+
+---
+
+## Express: API contracts (copy/paste minimal)
+
+**`server/devRoutes.js`**
+
+```js
+import { Router } from "express";
+import fs from "fs";
+import fsp from "fs/promises";
+import path from "path";
+import crypto from "crypto";
+
+const r = Router();
+const ROOT = process.cwd();
+const WL = new Set(["src", "public", "scripts"]); // whitelist tops
+
+const enabledFS = () => process.env.DEV_FS_ENABLE === "true";
+const enabledTerm = () => process.env.DEV_TERMINAL_ENABLE === "true";
+
+function assertAllowed(abs) {
+  const rel = path.relative(ROOT, abs);
+  if (rel.startsWith("..")) throw new Error("Path escape");
+  const top = rel.split(path.sep)[0];
+  if (!WL.has(top)) throw new Error("Not allowed");
+}
+
+r.get("/dev/fs", async (req, res) => {
+  if (!enabledFS()) return res.status(403).json({ error: "disabled" });
+  const p = req.query.path || "src";
+  const abs = path.join(ROOT, p);
+  try {
+    assertAllowed(abs);
+    const st = await fsp.stat(abs);
+    if (st.isDirectory()) {
+      const entries = await fsp.readdir(abs);
+      const list = await Promise.all(entries.map(async (name) => {
+        const s = await fsp.stat(path.join(abs, name));
+        return { name, dir: s.isDirectory(), size: s.size };
+      }));
+      return res.json({ path: p, entries: list });
+    } else {
+      const content = await fsp.readFile(abs, "utf8");
+      return res.json({ path: p, content });
+    }
+  } catch (e) { return res.status(400).json({ error: e.message }); }
+});
+
+r.post("/dev/fs", expressJson(), async (req, res) => {
+  if (!enabledFS()) return res.status(403).json({ error: "disabled" });
+  const { path: relPath, content } = req.body || {};
+  if (!relPath) return res.status(400).json({ error: "path required" });
+  const abs = path.join(ROOT, relPath);
+  try {
+    assertAllowed(abs);
+    let prev = "";
+    try { prev = await fsp.readFile(abs, "utf8"); } catch {}
+    await fsp.mkdir(path.dirname(abs), { recursive: true });
+    await fsp.writeFile(abs, content ?? "", "utf8");
+
+    // record diff
+    const diffsDir = path.join(ROOT, ".supernova", "diffs");
+    await fsp.mkdir(diffsDir, { recursive: true });
+    const id = `edit-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+    const diff = makeUnifiedDiff(relPath, prev, content ?? "");
+    await fsp.writeFile(path.join(diffsDir, `${id}.diff`), diff, "utf8");
+
+    // broadcast to preview via SSE (optional)
+    previewBroadcast({ type: "fileSaved", path: relPath, id });
+
+    return res.json({ ok: true, id });
+  } catch (e) { return res.status(400).json({ error: e.message }); }
+});
+
+function makeUnifiedDiff(file, a, b) {
+  const aL = a.split("\n"), bL = b.split("\n");
+  let out = `--- a/${file}\n+++ b/${file}\n`;
+  const max = Math.max(aL.length, bL.length);
+  for (let i = 0; i < max; i++) {
+    const av = aL[i], bv = bL[i];
+    if (av === bv) continue;
+    if (av !== undefined) out += `- ${av}\n`;
+    if (bv !== undefined) out += `+ ${bv}\n`;
+  }
+  return out;
+}
+
+// simple SSE for live preview ping
+const sseClients = new Set();
+r.get("/dev/preview/stream", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+  sseClients.add(res);
+  req.on("close", () => sseClients.delete(res));
+});
+function previewBroadcast(payload) {
+  const data = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const c of sseClients) c.write(data);
+}
+
+// terminal (whitelist)
+import { exec } from "child_process";
+const ALLOWED = new Set(["node -v", "npm run build", "npm run lint", "echo ok"]);
+r.post("/dev/terminal", expressJson(), (req, res) => {
+  if (!enabledTerm()) return res.status(403).json({ error: "disabled" });
+  const { cmd } = req.body || {};
+  if (!ALLOWED.has(cmd)) return res.status(400).json({ error: "not allowed" });
+  exec(cmd, { timeout: 60_000 }, (err, stdout, stderr) => {
+    if (err) return res.status(500).json({ ok: false, error: err.message, stdout, stderr });
+    res.json({ ok: true, stdout, stderr });
+  });
+});
+
+// design tokens
+const TOK = path.join(ROOT, "design.tokens.json");
+r.get("/design/tokens", async (_req, res) => {
+  try { return res.json(JSON.parse(await fsp.readFile(TOK, "utf8"))); }
+  catch { return res.json({ theme: { primary: "#fec72e", background: "#0b1f3a", text: "#ffffff" } }); }
+});
+r.post("/design/tokens", expressJson(), async (req, res) => {
+  await fsp.writeFile(TOK, JSON.stringify(req.body || {}, null, 2), "utf8");
+  previewBroadcast({ type: "tokensUpdated" });
+  res.json({ ok: true });
+});
+
+function expressJson() { return (await import("body-parser")).json(); } // ESM helper
+export default r;
+```
+
+**Wire it in your server**
+
+```js
+// server/index.js
+import express from "express";
+import devRoutes from "./devRoutes.js";
+const app = express();
+
+app.use("/api", devRoutes);
+
+// … your existing routes
+
+const port = process.env.PORT || 3001;
+app.listen(port, () => console.log("API on", port));
+```
+
+---
+
+## React SPA: pages & components (minimal)
+
+**Routing**
+Add routes for `/dev` and `/diff` in your router (React Router, etc.).
+
+**/dev page** (UX spec)
+
+* **Left**: File tree (GET `/api/dev/fs?path=…`)
+* **Center**: Editor (Monaco or textarea). **Save** → POST `/api/dev/fs`
+* **Right**:
+
+  * Preview iframe (points to your SPA, refreshes when SSE message arrives)
+  * Terminal pane (POST `/api/dev/terminal`)
+* **Design Mode** panel: inputs for `primary`, `background`, `text`; POST to `/api/design/tokens`; apply as CSS vars live.
+
+**DevConsole.tsx** (skeleton)
+
+```tsx
+import { useEffect, useState, useRef } from "react";
+
+export default function DevConsole() {
+  const [cwd, setCwd] = useState("src");
+  const [entries, setEntries] = useState<{name:string;dir:boolean;size:number}[]>([]);
+  const [path, setPath] = useState("src/App.tsx");
+  const [content, setContent] = useState("");
+  const [termOut, setTermOut] = useState("");
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  async function ls(p: string) {
+    const j = await (await fetch(`/api/dev/fs?path=${encodeURIComponent(p)}`)).json();
+    setCwd(j.path); setEntries(j.entries ?? []);
+  }
+  async function openf(p: string) {
+    const j = await (await fetch(`/api/dev/fs?path=${encodeURIComponent(p)}`)).json();
+    if (j.content !== undefined) { setPath(j.path); setContent(j.content); }
+  }
+  async function save() {
+    const j = await (await fetch(`/api/dev/fs`, { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ path, content }) })).json();
+    if (!j.ok) alert(j.error || "save failed");
+  }
+  async function run(cmd: string) {
+    const j = await (await fetch(`/api/dev/terminal`, { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify({ cmd }) })).json();
+    setTermOut(JSON.stringify(j, null, 2));
+  }
+
+  // SSE refresh for preview
+  useEffect(() => {
+    const es = new EventSource("/api/dev/preview/stream");
+    es.onmessage = () => { iframeRef.current?.contentWindow?.location.reload(); };
+    return () => es.close();
+  }, []);
+
+  useEffect(() => { ls("src"); }, []);
+
+  return (
+    <div className="grid" style={{ gridTemplateColumns: "280px 1fr 420px", gap: 12 }}>
+      <div>
+        <h3>Files ({cwd})</h3>
+        {entries.map(e =>
+          <div key={e.name}>
+            <button onClick={() => e.dir ? ls(`${cwd}/${e.name}`) : openf(`${cwd}/${e.name}`)}>
+              {e.dir ? "📁" : "📄"} {e.name}
+            </button>
+          </div>
+        )}
+      </div>
+      <div>
+        <div style={{ fontSize: 12, opacity: .7 }}>{path}</div>
+        <textarea style={{ width: "100%", height: 400 }} value={content} onChange={e => setContent(e.target.value)} />
+        <div style={{ marginTop: 8 }}>
+          <button onClick={save}>Save</button>
+        </div>
+        <DesignMode />
+      </div>
+      <div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <button onClick={() => run("node -v")}>node -v</button>
+          <button onClick={() => run("npm run build")}>build</button>
+          <button onClick={() => run("npm run lint")}>lint</button>
+        </div>
+        <pre style={{ whiteSpace: "pre-wrap" }}>{termOut}</pre>
+        <iframe ref={iframeRef} src="/" style={{ width: "100%", height: 300, background: "#fff" }} />
+      </div>
+    </div>
+  );
+}
+
+function DesignMode() {
+  const [tok, setTok] = useState<any>({ theme: { primary:"#fec72e", background:"#0b1f3a", text:"#ffffff" }});
+  useEffect(() => { fetch("/api/design/tokens").then(r=>r.json()).then(setTok); }, []);
+  useEffect(() => {
+    const root = document.documentElement.style;
+    root.setProperty("--the-primary", tok?.theme?.primary);
+    root.setProperty("--the-bg", tok?.theme?.background);
+    root.setProperty("--the-text", tok?.theme?.text);
+  }, [tok]);
+  const save = () => fetch("/api/design/tokens", { method:"POST", headers:{ "content-type":"application/json" }, body: JSON.stringify(tok) });
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <h4>Design Mode</h4>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap: 8 }}>
+        {["primary","background","text"].map(k => (
+          <label key={k}>{k}
+            <input value={tok.theme[k]} onChange={e => setTok({ ...tok, theme: { ...tok.theme, [k]: e.target.value }})} />
+          </label>
+        ))}
+      </div>
+      <button onClick={save}>Save tokens</button>
+      <div style={{ marginTop: 8, padding: 12, borderRadius: 12, background:"var(--the-bg)", color:"var(--the-text)" }}>
+        <button style={{ background:"var(--the-primary)", color:"#000", padding:"8px 12px", borderRadius: 10 }}>Primary Button</button>
+      </div>
+    </div>
+  );
+}
+```
+
+**Global CSS** (apply tokens):
+
+```css
+:root {
+  --the-primary: #fec72e;
+  --the-bg: #0b1f3a;
+  --the-text: #ffffff;
+}
+body { background: var(--the-bg); color: var(--the-text); }
+button.primary { background: var(--the-primary); color: #000; }
+```
+
+**/diff page** (list recorded diffs)
+
+```tsx
+import { useEffect, useState } from "react";
+
+export default function DiffPage() {
+  const [items, setItems] = useState<{id:string; title:string; diff:string}[]>([]);
+  useEffect(() => { load(); }, []);
+  async function load() {
+    const j = await (await fetch("/api/diff/list")).json();
+    setItems(j.items || []);
+  }
+  return (
+    <div>
+      <h2>Diffs</h2>
+      {!items.length && <div>No diffs yet. Save a file in /dev.</div>}
+      {items.map((it) => (
+        <details key={it.id} style={{ margin:"12px 0" }}>
+          <summary>{it.title}</summary>
+          <pre style={{ whiteSpace:"pre-wrap" }}>{it.diff}</pre>
+        </details>
+      ))}
+    </div>
+  );
+}
+```
+
+**Add a small route for listing diffs** (Express):
+
+```js
+r.get("/diff/list", async (_req, res) => {
+  try {
+    const dir = path.join(ROOT, ".supernova", "diffs");
+    const files = await fsp.readdir(dir);
+    const items = await Promise.all(files.filter(f=>f.endsWith(".diff")).map(async f => {
+      const diff = await fsp.readFile(path.join(dir, f), "utf8");
+      return { id: f.replace(".diff",""), title: `Change ${f}`, diff };
+    }));
+    res.json({ items });
+  } catch { res.json({ items: [] }); }
+});
+```
+
+---
+
+## Rollout steps (short)
+
+1. Set env flags in your dev `.env`:
+   `DEV_FS_ENABLE=true` and (optionally) `DEV_TERMINAL_ENABLE=true`
+2. Mount `devRoutes` under `/api` and restart the server.
+3. Add router links to `/dev` and `/diff` in your SPA.
+4. Confirm:
+
+   * `/dev` lists files and opens editor
+   * Save → returns `{ ok: true }`, `/diff` shows a new diff
+   * Terminal commands return JSON
+   * Changing tokens updates theme live
+
+## Acceptance checks
+
+* No path traversal possible; writes only under allowlist.
+* Terminal runs only whitelisted commands.
+* Tokens persist to `design.tokens.json` and load on refresh.
+* `/dev` SSE refreshes the iframe on save without hard reloads.
+* Rate limiting in front (e.g., express-rate-limit) if your app is public.
+
+---
+
+If you later want **Option C (Hybrid)**, we’ll add:
+
+* Agent output log viewer next to terminal
+* “Submit for Approval” button that hits your governance API
+* Optional Git provider integration to commit diffs → branch PRs
+
+Want me to generate a **drop-in ZIP** for Option A with these files already arranged for your SPA/Express repo?
