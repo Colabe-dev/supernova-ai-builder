@@ -205,7 +205,7 @@ helmfile/
 
 ### Automatic Migrations (Default)
 
-The `migrate-hook.yaml` template creates a Helm Job that runs on every deploy:
+The `migrate-hook.yaml` template creates a Helm Job that runs on every deploy with optional exponential retry:
 
 ```yaml
 migrations:
@@ -215,11 +215,23 @@ migrations:
   command: ["node", "db/migrate.mjs"]
   backoffLimit: 0
   activeDeadlineSeconds: 300
+  retry:
+    exponential:
+      enabled: true          # Optional: exponential backoff
+      initialSeconds: 2      # Starting backoff delay
+      maxSeconds: 60         # Maximum backoff delay
+      maxAttempts: 6         # Maximum retry attempts
 ```
+
+**How Retry Works:**
+- Wraps command in bash retry loop
+- Exponential backoff: 2s → 4s → 8s → 16s → 32s → 60s
+- Independent from Kubernetes `backoffLimit`
+- Stops after 6 attempts or first success
 
 **Flow:**
 1. Helm installs/upgrades resources
-2. Migration Job runs: `node db/migrate.mjs`
+2. Migration Job runs: `node db/migrate.mjs` (with retry if enabled)
 3. Job completes successfully
 4. Pods roll to new version
 5. Job auto-deletes after TTL
@@ -228,6 +240,37 @@ migrations:
 ```bash
 kubectl -n supernova get jobs | grep migrate
 kubectl -n supernova logs job/supernova-server-migrate-<revision>
+```
+
+### Data Seeding (Optional)
+
+Separate hook for seeding initial/reference data:
+
+```yaml
+seeds:
+  enabled: true
+  when: ["post-install"]        # Only on first install
+  # OR when: ["post-install", "post-upgrade"]  # On every deploy
+  weight: 20                     # Runs after migrations
+  command: ["node", "db/seed.mjs"]
+  retry:
+    exponential:
+      enabled: true
+      initialSeconds: 2
+      maxSeconds: 60
+      maxAttempts: 6
+```
+
+**Use Cases:**
+- Admin users and roles
+- Reference data (countries, currencies)
+- Default settings
+- Sample data for staging/dev
+
+**Monitor seeds:**
+```bash
+kubectl -n supernova get jobs | grep seed
+kubectl -n supernova logs job/supernova-server-seed-<revision>
 ```
 
 ### Pre-Deployment Migrations

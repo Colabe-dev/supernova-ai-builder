@@ -1,0 +1,81 @@
+Here’s the **single next step** and the exact **input I need from you** to lock this down for prod.
+
+# Step 1 — Send me this filled file (values-prod.yaml)
+
+Fill the blanks and paste it back to me (or drop it in `deploy/helm/supernova-server/values-prod.yaml`).
+
+```yaml
+# --- Required: infra & domains
+image:
+  repository: ghcr.io/<ORG>/<REPO>        # e.g., ghcr.io/collab/supernova-server
+  tag: v1.0.0
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: api.<YOUR_DOMAIN>             # e.g., api.supernova.xyz
+      paths: [ { path: "/", pathType: Prefix } ]
+  tls:
+    - secretName: api-supernova-tls       # existing cert secret
+      hosts: [ api.<YOUR_DOMAIN> ]
+
+# --- Required: auth & security
+env:
+  NODE_ENV: "production"
+  DEV_AUTH_OPEN: "false"
+  AUTH_AUDIENCE: "supernova-api"
+  AUTH_ISSUER: "<AUTH_ISSUER_URL>"        # e.g., https://auth.collab.xyz
+  PORT: "3001"
+  RATE_LIMIT_WINDOW_MS: "60000"
+  RATE_LIMIT_READ_MAX: "120"
+  RATE_LIMIT_WRITE_MAX: "30"
+  RATE_LIMIT_WEBHOOK_MAX: "1200"
+
+secrets:
+  DATABASE_URL: "<postgres://...>"
+  REDIS_URL: "<redis://...>"
+  SENTRY_DSN: "<dsn-or-empty>"
+  AUTH_JWKS_URL: "<ISSUER>/.well-known/jwks.json"
+
+  # Collab Pay
+  COLLAB_PAY_API_BASE: "https://pay.<YOUR_DOMAIN>"
+  COLLAB_PAY_SECRET: "<server-to-pay-shared-secret>"
+  COLLAB_PAY_WEBHOOK_SECRET: "<webhook-signing-secret>"
+
+  # In-app purchases (optional now, required later)
+  GOOGLE_SERVICE_ACCOUNT_KEY: "<json or base64>"
+  GOOGLE_PACKAGE_NAME: "com.collab.supernova"
+  APPLE_BUNDLE_ID: "com.collab.supernova"
+  IAP_USE_SANDBOX: "false"
+  APPLE_SHARED_SECRET: "<app-store-shared-secret>"
+
+# --- Optional: migrations/seed hooks (enabled = safe defaults)
+migrations:
+  enabled: true
+  when: ["post-install","post-upgrade"]
+  weight: 10
+  command: ["node","db/migrate.mjs"]
+  retry: { exponential: { enabled: true, initialSeconds: 2, maxSeconds: 60, maxAttempts: 6 } }
+
+seeds:
+  enabled: false   # flip to true if you want seeding on deploy
+  when: ["post-install","post-upgrade"]
+  weight: 20
+  command: ["node","db/seed.mjs"]
+  retry: { exponential: { enabled: true, initialSeconds: 2, maxSeconds: 60, maxAttempts: 6 } }
+```
+
+## That’s it.
+
+Once you send this back, I’ll:
+
+* merge it into the kit,
+* wire the **collab-lib** + hooks (if you want), and
+* give you the exact `helmfile -e prod apply` command.
+
+If you prefer, just reply with the **three must-haves** and I’ll build the file for you:
+
+1. `ghcr.io/<ORG>/<REPO>`
+2. `api.<YOUR_DOMAIN>`
+3. `DATABASE_URL`, `REDIS_URL`, `AUTH_ISSUER` (I’ll infer `AUTH_JWKS_URL`)

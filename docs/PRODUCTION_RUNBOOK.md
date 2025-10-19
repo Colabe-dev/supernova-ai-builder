@@ -408,7 +408,7 @@ externalSecrets:
 
 ### Automatic Migrations (Default)
 
-Migrations run automatically via Helm hook:
+Migrations run automatically via Helm hook with optional exponential retry:
 
 ```yaml
 # Configured in values.yaml
@@ -419,7 +419,19 @@ migrations:
   command: ["node", "db/migrate.mjs"]
   backoffLimit: 0
   activeDeadlineSeconds: 300
+  retry:
+    exponential:
+      enabled: true          # Optional: exponential backoff
+      initialSeconds: 2      # Starting backoff delay
+      maxSeconds: 60         # Maximum backoff delay
+      maxAttempts: 6         # Maximum retry attempts
 ```
+
+**How Retry Works:**
+- Wraps migration command in bash retry loop
+- Starts with 2s delay, doubles each failure (2s → 4s → 8s → 16s → 32s → 60s)
+- Independent from Kubernetes `backoffLimit` for granular control
+- Stops after 6 attempts or first success
 
 **Monitor migration Job:**
 ```bash
@@ -460,6 +472,50 @@ migrations:
   when: ["pre-install", "pre-upgrade"]
   weight: -10
 ```
+
+### Data Seeding
+
+Separate hook for seeding initial/reference data (runs after migrations):
+
+```yaml
+# Configured in values.yaml
+seeds:
+  enabled: true
+  when: ["post-install"]        # Only on first install
+  # OR when: ["post-install", "post-upgrade"]  # On every deploy
+  weight: 20                     # Runs after migrations (weight: 10)
+  command: ["node", "db/seed.mjs"]
+  retry:
+    exponential:
+      enabled: true
+      initialSeconds: 2
+      maxSeconds: 60
+      maxAttempts: 6
+```
+
+**Use Cases:**
+- Initial admin users
+- Reference data (countries, currencies, categories)
+- Default configuration
+- Sample/demo data for staging
+
+**Monitor seed Job:**
+```bash
+# Watch Jobs
+kubectl -n supernova get jobs | grep seed
+
+# Check logs
+kubectl -n supernova logs job/supernova-server-seed-<revision>
+
+# Verify completion
+kubectl -n supernova describe job/supernova-server-seed-<revision>
+```
+
+**Best Practices:**
+- Make seeds **idempotent** (safe to run multiple times)
+- Use `INSERT ... ON CONFLICT DO NOTHING` or similar
+- Check if data exists before inserting
+- Keep seeds fast (<30s) to avoid deployment delays
 
 ---
 

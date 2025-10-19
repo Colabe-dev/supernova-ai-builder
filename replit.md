@@ -99,13 +99,14 @@ Supernova utilizes specialized AI agents (Planner, Implementer, Tester, Fixer) p
 ## Deployment & Operations
 
 ### Documentation
+- **Package Ecosystem**: `docs/PACKAGE_ECOSYSTEM.md` - Explains the relationship between this workspace and the all-in-one consolidated package, compatibility map, and migration paths
 - **Production Runbook**: `docs/PRODUCTION_RUNBOOK.md` - Complete operational guide for deploying and managing Supernova in production, including infrastructure setup, security configuration, Helm deployment, migrations, observability, and incident response
 - **CI/CD Guide**: `docs/CICD_GUIDE.md` - Comprehensive pipeline documentation covering build workflows, branch→environment mapping, deployment procedures, rollback strategies, and troubleshooting
 - **Security Runbook**: `SECURITY_PRODUCTION_RUNBOOK.md` - Focused security stack guide with JWKS generation, JWT verification, rate limiting, and end-to-end smoke tests
 
 ### Deployment Options
 - **Kubernetes**: Full manifests with Kustomize bases and dev/staging/prod overlays (available separately)
-- **Helm Chart**: `supernova-server` chart with environment-specific values and migration hooks (available separately)
+- **Helm Chart**: `supernova-server` chart with environment-specific values, migration hooks with exponential retry, and seed hooks (available separately)
 - **Helmfile**: Multi-environment orchestration with embedded chart (available separately)
 - **Helm Library**: `collab-lib` shared templates for standardized deployments across services (available separately)
 
