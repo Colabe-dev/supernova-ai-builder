@@ -1,0 +1,5 @@
+{
+  "rel": "server/design.tokens.json",
+  "base": "",
+  "next": "{\n  \"theme\": {\n    \"bg\": \"#0b1f3a\",\n    \"text\": \"#ffffff\",\n    \"primary\": \"#fec72e\"\n  }\n}"
+}

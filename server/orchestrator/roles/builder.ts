@@ -3,7 +3,7 @@ import path from 'path';
 import { diffLines } from 'diff';
 
 const ROOT = process.cwd();
-const WHITELIST = new Set(['client/src', 'server', 'shared', 'public']);
+const WHITELIST = new Set(['client/src', 'client/package.json', 'server', 'shared', 'public']);
 const STATE_DIR = path.join(ROOT, 'server', '.supernova');
 
 function normalizeAllowed(relPath: string): string {
@@ -49,11 +49,12 @@ interface BuildAction {
 
 export async function builder(act: BuildAction) {
   const id = act.id || 'patch-' + Date.now();
-  const rel = act.path;
-  const abs = normalizeAllowed(rel);
 
   if (!act.apply) {
-    // Preview mode
+    // Preview mode - normalize path here
+    const rel = act.path;
+    const abs = normalizeAllowed(rel);
+    
     let base = '';
     if (fs.existsSync(abs)) {
       base = fs.readFileSync(abs, 'utf-8');
@@ -86,16 +87,36 @@ export async function builder(act: BuildAction) {
   // Apply mode
   try {
     const previewPath = statePath(`${id}.preview.json`);
-    const snap = JSON.parse(fs.readFileSync(previewPath, 'utf-8'));
-    ensureDir(abs);
-    fs.writeFileSync(abs, snap.next, 'utf-8');
-    return { ok: true };
-  } catch {
-    // Fallback if apply called directly with content
+    
+    // Try to load from preview first (preferred, secure path)
+    if (fs.existsSync(previewPath)) {
+      const snap = JSON.parse(fs.readFileSync(previewPath, 'utf-8'));
+      const targetAbs = normalizeAllowed(snap.rel);
+      ensureDir(targetAbs);
+      fs.writeFileSync(targetAbs, snap.next, 'utf-8');
+      return { ok: true };
+    }
+    
+    // Fallback: use provided path and content (still validated through whitelist)
+    if (!act.path) {
+      throw new Error(`No preview found for ${id} and no path provided`);
+    }
+    
+    const targetAbs = normalizeAllowed(act.path);
     let content = '';
-    if (act.content != null) content = act.content;
-    ensureDir(abs);
-    fs.writeFileSync(abs, content, 'utf-8');
+    
+    if (act.content != null) {
+      content = act.content;
+    } else if (act.mutator) {
+      const base = fs.existsSync(targetAbs) ? fs.readFileSync(targetAbs, 'utf-8') : '';
+      const json = base ? JSON.parse(base) : {};
+      content = JSON.stringify(act.mutator(json), null, 2);
+    }
+    
+    ensureDir(targetAbs);
+    fs.writeFileSync(targetAbs, content, 'utf-8');
     return { ok: true };
+  } catch (e: any) {
+    throw new Error(`Failed to apply patch ${id}: ${e.message}`);
   }
 }

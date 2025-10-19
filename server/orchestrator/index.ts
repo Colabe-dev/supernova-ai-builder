@@ -116,8 +116,12 @@ export async function orchestrate({ msg, sessionId, send }: OrchestrateParams) {
   }
 
   if (msg.type === 'approve_patch') {
-    const applied = await builder({ id: msg.patchId, apply: true, path: '' });
-    send({ type: 'patch_applied', patchId: msg.patchId, ok: applied.ok });
+    try {
+      const applied = await builder({ id: msg.patchId, apply: true, path: '' });
+      send({ type: 'patch_applied', patchId: msg.patchId, ok: applied.ok });
+    } catch (e: any) {
+      send({ type: 'patch_applied', patchId: msg.patchId, ok: false, error: e.message });
+    }
   }
 
   if (msg.type === 'choice') {
