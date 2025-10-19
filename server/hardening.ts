@@ -1,6 +1,6 @@
 import helmet from "helmet";
 import cors from "cors";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { Express, Request, Response, NextFunction } from "express";
 
 export function applySecurity(app: Express) {
@@ -33,6 +33,14 @@ export function applySecurity(app: Express) {
       windowMs: 60_000,
       max: isDevelopment ? 300 : 60, // 300 req/min dev, 60 in production
       message: "Too many requests, please try again later",
+      standardHeaders: true,
+      legacyHeaders: false,
+      // Use IPv6-safe key generator for Replit environment
+      keyGenerator: (req) => {
+        const ip = req.ip || req.socket.remoteAddress || "unknown";
+        // Handle IPv6 addresses properly using ipKeyGenerator
+        return ipKeyGenerator(ip);
+      },
       skip: (req) => {
         // Skip rate limiting for static assets in development
         return isDevelopment && (

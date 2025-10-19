@@ -8,6 +8,15 @@ Supernova is an intelligent application builder platform that uses AI-powered ag
 **Last Updated**: 2025-01-19
 
 ## Recent Changes
+- **2025-01-19 (Collab Brand Pack v1)**: Collab Creative Studio Brand Integration
+  - ✅ Applied Collab brand pack: golden yellow primary (#fec72e), dark navy backgrounds (#0b1f3a, #0f274d)
+  - ✅ Created bootstrapTokens.ts for automatic token loading and SSE listener
+  - ✅ Refactored App.tsx to use modular bootstrapTokens import (cleaner architecture)
+  - ✅ Fixed rate limiting with IPv6-safe ipKeyGenerator for Replit proxy environment
+  - ✅ Created ui/index.ts barrel export for brand system primitives
+  - ✅ All brand tokens validated and applied: theme, typography (Inter), radius, spacing, shadows, motion
+  - ✅ Live SSE updates working: /dev Design Mode changes propagate instantly
+
 - **2025-01-19 (Brand System)**: Runtime Design Tokens & Layout Primitives
   - ✅ CSS variable mapping system (tokens.css) for all design values
   - ✅ Runtime token application (applyTokens.ts) with SSE live updates

@@ -1,5 +1,4 @@
 import { Switch, Route } from "wouter";
-import { useEffect } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -8,8 +7,8 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/contexts/theme-context";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { applyTokens } from "@/ui/applyTokens";
 import "@/ui/tokens.css";
+import "./bootstrapTokens";
 import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import ProjectDetail from "@/pages/project-detail";
@@ -100,41 +99,6 @@ function App() {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
   };
-
-  // Load design tokens on init and listen for updates via SSE
-  useEffect(() => {
-    async function loadTokens() {
-      try {
-        const response = await fetch("/api/design/tokens");
-        const tokens = await response.json();
-        applyTokens(tokens);
-      } catch (error) {
-        console.warn("Failed to load design tokens:", error);
-      }
-    }
-
-    loadTokens();
-
-    // Listen for token updates via SSE
-    const eventSource = new EventSource("/api/dev/preview/stream");
-    
-    eventSource.onmessage = async (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        
-        if (payload.type === "tokensUpdated") {
-          const response = await fetch("/api/design/tokens");
-          const tokens = await response.json();
-          applyTokens(tokens);
-          console.log("Design tokens reloaded and applied");
-        }
-      } catch (error) {
-        console.warn("Failed to process SSE event:", error);
-      }
-    };
-
-    return () => eventSource.close();
-  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
