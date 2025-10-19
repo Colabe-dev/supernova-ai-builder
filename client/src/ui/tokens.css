@@ -1,15 +1,24 @@
-/* Design tokens as CSS variables - populated by applyTokens() at runtime */
+/* Collab Creative Studio - Neon Design System */
 :root {
-  /* Theme colors */
-  --color-primary: #fec72e;
-  --color-on-primary: #0b0b0b;
-  --color-bg: #0b1f3a;
-  --color-surface: #0f274d;
+  /* Neon Theme Colors */
+  --color-primary: #00ffff;
+  --color-secondary: #ff00ff;
+  --color-accent: #ffff00;
+  --color-on-primary: #000000;
+  --color-bg: #0a0a0f;
+  --color-surface: #121218;
   --color-text: #ffffff;
-  --color-muted: #96a5c0;
-  --color-success: #19c37d;
-  --color-warning: #f9ae2b;
-  --color-danger: #ef4444;
+  --color-muted: #8b5cf6;
+  --color-success: #00ff88;
+  --color-warning: #ffaa00;
+  --color-danger: #ff0066;
+  
+  /* Extra neon colors */
+  --color-neon-cyan: #00ffff;
+  --color-neon-pink: #ff00ff;
+  --color-neon-yellow: #ffff00;
+  --color-neon-green: #00ff88;
+  --color-neon-orange: #ff6600;
 
   /* Typography */
   --font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto;
@@ -22,7 +31,7 @@
   --radius-xl: 24px;
   --radius-full: 9999px;
 
-  /* Spacing (8px base scale) */
+  /* Spacing */
   --space-1: 8px;
   --space-2: 16px;
   --space-3: 24px;
@@ -30,10 +39,14 @@
   --space-5: 40px;
   --space-6: 48px;
 
-  /* Shadows */
+  /* Neon Glow Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.15);
   --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.25);
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.35);
+  --shadow-neon-cyan: 0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 30px #00ffff;
+  --shadow-neon-pink: 0 0 10px #ff00ff, 0 0 20px #ff00ff, 0 0 30px #ff00ff;
+  --shadow-neon-yellow: 0 0 10px #ffff00, 0 0 20px #ffff00, 0 0 30px #ffff00;
+  --shadow-neon-green: 0 0 10px #00ff88, 0 0 20px #00ff88, 0 0 30px #00ff88;
 
   /* Motion */
   --duration-sm: 120ms;
@@ -42,11 +55,179 @@
   --easing: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* Apply tokens to body */
-html,
-body {
+/* Animated Grid Background */
+html, body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-family);
   line-height: var(--line-height);
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: -1;
+  background-image: 
+    linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px),
+    linear-gradient(rgba(255, 0, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 0, 255, 0.05) 1px, transparent 1px);
+  background-size: 
+    50px 50px,
+    50px 50px,
+    10px 10px,
+    10px 10px;
+  background-position: 
+    -1px -1px,
+    -1px -1px,
+    -1px -1px,
+    -1px -1px;
+  animation: gridScroll 20s linear infinite;
+}
+
+@keyframes gridScroll {
+  0% {
+    background-position: 
+      0 0,
+      0 0,
+      0 0,
+      0 0;
+  }
+  100% {
+    background-position: 
+      50px 50px,
+      50px 50px,
+      10px 10px,
+      10px 10px;
+  }
+}
+
+/* Neon Text Utilities */
+.neon-text-cyan {
+  color: var(--color-neon-cyan);
+  text-shadow: var(--shadow-neon-cyan);
+}
+
+.neon-text-pink {
+  color: var(--color-neon-pink);
+  text-shadow: var(--shadow-neon-pink);
+}
+
+.neon-text-yellow {
+  color: var(--color-neon-yellow);
+  text-shadow: var(--shadow-neon-yellow);
+}
+
+.neon-text-green {
+  color: var(--color-neon-green);
+  text-shadow: var(--shadow-neon-green);
+}
+
+/* Gradient Text */
+.gradient-text {
+  background: linear-gradient(135deg, #00ffff 0%, #ff00ff 50%, #ffff00 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientShift 3s ease infinite;
+}
+
+@keyframes gradientShift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Neon Border Effects */
+.neon-border-cyan {
+  border: 2px solid var(--color-neon-cyan);
+  box-shadow: var(--shadow-neon-cyan);
+}
+
+.neon-border-pink {
+  border: 2px solid var(--color-neon-pink);
+  box-shadow: var(--shadow-neon-pink);
+}
+
+/* Neon Card Effect */
+.neon-card {
+  background: rgba(18, 18, 24, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 255, 255, 0.3);
+  box-shadow: 
+    0 0 20px rgba(0, 255, 255, 0.2),
+    inset 0 0 20px rgba(0, 255, 255, 0.05);
+  transition: all var(--duration-md) var(--easing);
+}
+
+.neon-card:hover {
+  border-color: rgba(0, 255, 255, 0.6);
+  box-shadow: 
+    0 0 30px rgba(0, 255, 255, 0.4),
+    inset 0 0 30px rgba(0, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+/* Pulsing Neon Animation */
+@keyframes neonPulse {
+  0%, 100% {
+    text-shadow: 
+      0 0 10px currentColor,
+      0 0 20px currentColor,
+      0 0 30px currentColor;
+  }
+  50% {
+    text-shadow: 
+      0 0 20px currentColor,
+      0 0 30px currentColor,
+      0 0 40px currentColor,
+      0 0 50px currentColor;
+  }
+}
+
+.neon-pulse {
+  animation: neonPulse 2s ease-in-out infinite;
+}
+
+/* Colorful Headings */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Scanline Effect (subtle) */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent 50%,
+    rgba(0, 255, 255, 0.02) 51%
+  );
+  background-size: 100% 4px;
+  animation: scanline 8s linear infinite;
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(4px);
+  }
 }

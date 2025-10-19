@@ -1,19 +1,26 @@
 {
   "meta": {
     "brand": "collab-creative-studio",
-    "version": "1.0.0"
+    "version": "2.0.0-neon"
   },
   "theme": {
     "mode": "dark",
-    "primary": "#fec72e",
-    "onPrimary": "#0b0b0b",
-    "bg": "#0b1f3a",
-    "surface": "#0f274d",
+    "primary": "#00ffff",
+    "secondary": "#ff00ff",
+    "accent": "#ffff00",
+    "onPrimary": "#000000",
+    "bg": "#0a0a0f",
+    "surface": "#121218",
     "text": "#ffffff",
-    "muted": "#96a5c0",
-    "success": "#19c37d",
-    "warning": "#f9ae2b",
-    "danger": "#ef4444"
+    "muted": "#8b5cf6",
+    "success": "#00ff88",
+    "warning": "#ffaa00",
+    "danger": "#ff0066",
+    "neonCyan": "#00ffff",
+    "neonPink": "#ff00ff",
+    "neonYellow": "#ffff00",
+    "neonGreen": "#00ff88",
+    "neonOrange": "#ff6600"
   },
   "typography": {
     "fontFamily": "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto",
@@ -25,7 +32,9 @@
       20,
       24,
       30,
-      36
+      36,
+      48,
+      64
     ],
     "lineHeight": 1.5
   },
@@ -42,7 +51,10 @@
   "shadow": {
     "sm": "0 1px 2px rgba(0,0,0,.15)",
     "md": "0 6px 16px rgba(0,0,0,.25)",
-    "lg": "0 12px 32px rgba(0,0,0,.35)"
+    "lg": "0 12px 32px rgba(0,0,0,.35)",
+    "neonCyan": "0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 30px #00ffff",
+    "neonPink": "0 0 10px #ff00ff, 0 0 20px #ff00ff, 0 0 30px #ff00ff",
+    "neonYellow": "0 0 10px #ffff00, 0 0 20px #ffff00, 0 0 30px #ffff00"
   },
   "motion": {
     "duration": {

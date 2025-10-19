@@ -1,6 +1,7 @@
 /**
  * Runtime token application - updates CSS variables from design.tokens.json
  * Call this on app init and whenever tokens are updated via SSE
+ * Collab Creative Studio - Neon Edition
  */
 export function applyTokens(tokens: any) {
   const root = document.documentElement.style;
@@ -14,16 +15,25 @@ export function applyTokens(tokens: any) {
   const typography = tokens.typography || {};
   const motion = tokens.motion || {};
 
-  // Theme colors
-  set("--color-primary", theme.primary || "#fec72e");
-  set("--color-on-primary", theme.onPrimary || "#0b0b0b");
-  set("--color-bg", theme.bg || "#0b1f3a");
-  set("--color-surface", theme.surface || theme.bg || "#0f274d");
+  // Neon theme colors
+  set("--color-primary", theme.primary || "#00ffff");
+  set("--color-secondary", theme.secondary || "#ff00ff");
+  set("--color-accent", theme.accent || "#ffff00");
+  set("--color-on-primary", theme.onPrimary || "#000000");
+  set("--color-bg", theme.bg || "#0a0a0f");
+  set("--color-surface", theme.surface || "#121218");
   set("--color-text", theme.text || "#ffffff");
-  set("--color-muted", theme.muted || "#96a5c0");
-  set("--color-success", theme.success || "#19c37d");
-  set("--color-warning", theme.warning || "#f9ae2b");
-  set("--color-danger", theme.danger || "#ef4444");
+  set("--color-muted", theme.muted || "#8b5cf6");
+  set("--color-success", theme.success || "#00ff88");
+  set("--color-warning", theme.warning || "#ffaa00");
+  set("--color-danger", theme.danger || "#ff0066");
+  
+  // Extra neon colors
+  set("--color-neon-cyan", theme.neonCyan || "#00ffff");
+  set("--color-neon-pink", theme.neonPink || "#ff00ff");
+  set("--color-neon-yellow", theme.neonYellow || "#ffff00");
+  set("--color-neon-green", theme.neonGreen || "#00ff88");
+  set("--color-neon-orange", theme.neonOrange || "#ff6600");
 
   // Typography
   set("--font-family", typography.fontFamily || "Inter, ui-sans-serif, system-ui");
@@ -45,10 +55,14 @@ export function applyTokens(tokens: any) {
   set("--space-5", `${base * 5}px`);
   set("--space-6", `${base * 6}px`);
 
-  // Shadows
+  // Shadows (including neon glows)
   set("--shadow-sm", shadow.sm || "0 1px 2px rgba(0,0,0,.15)");
   set("--shadow-md", shadow.md || "0 6px 16px rgba(0,0,0,.25)");
   set("--shadow-lg", shadow.lg || "0 12px 32px rgba(0,0,0,.35)");
+  set("--shadow-neon-cyan", shadow.neonCyan || "0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 30px #00ffff");
+  set("--shadow-neon-pink", shadow.neonPink || "0 0 10px #ff00ff, 0 0 20px #ff00ff, 0 0 30px #ff00ff");
+  set("--shadow-neon-yellow", shadow.neonYellow || "0 0 10px #ffff00, 0 0 20px #ffff00, 0 0 30px #ffff00");
+  set("--shadow-neon-green", shadow.neonGreen || "0 0 10px #00ff88, 0 0 20px #00ff88, 0 0 30px #00ff88");
 
   // Motion
   const duration = motion.duration || {};
