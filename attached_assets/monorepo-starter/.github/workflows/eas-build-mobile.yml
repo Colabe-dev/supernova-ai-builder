@@ -1,0 +1,29 @@
+name: Mobile — EAS Build
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        platform: [ android, ios ]
+        profile: [ preview ]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '18' }
+      - name: Install EAS
+        run: npm i -g eas-cli
+      - name: Install deps (mobile)
+        run: |
+          cd mobile-expo || exit 0
+          npm i
+      - name: EAS build
+        env:
+          EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+        run: |
+          cd mobile-expo
+          eas build -p ${{ matrix.platform }} --profile ${{ matrix.profile }} --non-interactive

@@ -1,0 +1,10 @@
+{
+  "meta": {
+    "brand": "Supernova"
+  },
+  "theme": {
+    "bg": "#0b1f3a",
+    "text": "#ffffff",
+    "primary": "#fec72e"
+  }
+}

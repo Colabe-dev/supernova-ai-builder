@@ -1,0 +1,87 @@
+All set. I went ahead and shipped the **full monorepo starter** so you can boot everything end-to-end immediately.
+
+**Download:** [supernova-monorepo-starter-20251019-210359.zip](sandbox:/mnt/data/supernova-monorepo-starter-20251019-210359.zip)
+`sha256: f2c11e5525ab8b0388a3f01f11e77f73ee48017f8c00e13de53516c8c1e2676d`
+
+# What you got
+
+* **server/** — Express + Observability (Pino/Sentry) + **Security Pro (JWKS auth, Redis limiter)** + **Entitlements (Postgres)** + **Real IAP (Google/Apple)**.
+* **mobile-expo/** — Expo SDK base that reads design tokens from the server.
+* **eas.json** + **EAS build workflow**.
+* **design.tokens.json** at the repo root (mobile pulls this via server endpoint).
+* **docker-compose.yml** for Postgres + Redis.
+* **.env.sample** already aligned with the stack.
+
+# Run order (zero fluff)
+
+```bash
+# 1) Infra
+docker compose up -d
+
+# 2) Env
+cp .env.sample .env
+
+# 3) Install
+npm i
+
+# 4) DB migrations
+npm run -w server migrate
+
+# 5) API
+npm run -w server dev
+
+# 6) Mobile (new terminal)
+cd mobile-expo
+npm i
+npx expo start
+```
+
+# Key endpoints
+
+* `GET /healthz` — health
+* `GET /api/design/tokens` — serves `design.tokens.json`
+* `GET /api/entitlements/:profileId` — RBAC-protected (JWKS auth)
+* `POST /api/entitlements/grant` — RBAC/admin
+* `POST /api/webhooks/collabpay` — HMAC + rate-limited
+* `POST /api/iap/google/verify` — Real Google verify
+* `POST /api/iap/apple/verify` — StoreKit 2 JWS verify (legacy fallback included)
+
+# Secrets to set (minimum)
+
+```
+# In .env
+DATABASE_URL=postgres://supernova:supernova@localhost:5432/supernova
+REDIS_URL=redis://localhost:6379
+
+# Dev auth
+AUTH_JWKS_URL=http://localhost:3001/auth/.well-known/jwks.json
+DEV_AUTH_OPEN=true   # turn false in prod
+```
+
+> For **real IAP**, set:
+
+```
+IAP_STRICT=true
+GOOGLE_SERVICE_ACCOUNT_KEY=<one-line JSON>
+GOOGLE_PACKAGE_NAME=com.collab.supernova
+APPLE_BUNDLE_ID=com.collab.supernova
+```
+
+# Sanity checks
+
+```bash
+curl http://localhost:3001/healthz
+curl http://localhost:3001/api/design/tokens
+
+# grant (requires admin JWT if DEV_AUTH_OPEN=false)
+curl -X POST http://localhost:3001/api/entitlements/grant \
+  -H 'content-type: application/json' \
+  -d '{"profileId":"u1","grant":{"type":"coins","amount":100,"reason":"dev"}}'
+```
+
+# Notes
+
+* JWKS publisher is mounted but returns an empty set by default (for real verification, point `AUTH_JWKS_URL` to your issuer’s JWKS or drop in the **Auth Issuer** overlay and rotate keys).
+* The EAS workflow is included; set `EAS_TOKEN` in GitHub → Actions → Secrets to enable CI builds.
+
+If you want me to layer in the **web client** (React SPA with `/dev`, `/diff`, `/approvals`) into the monorepo next, say **“add web app”** and I’ll ship the overlay.

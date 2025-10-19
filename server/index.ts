@@ -5,6 +5,8 @@ import { applySecurity } from "./hardening";
 import { applyObservability, errorHandler } from "./observability/index.js";
 import webhooksRouter from "./entitlements/webhooks.db.js";
 import issuerRouter from "./auth/issuer/index.js";
+import jwksRouter from "./auth/jwks/publish.js";
+import { parseAuthJwks, requireAuth } from "./auth/verify.js";
 
 // Enable dev console features in development
 if (process.env.NODE_ENV === "development") {
@@ -27,8 +29,9 @@ app.use('/api/webhooks', webhooksRouter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Mount Auth Issuer for JWT token generation (POST /auth/token)
-app.use('/auth', issuerRouter);
+// Mount Security Pro: JWKS endpoint and Auth Issuer
+app.use('/auth', jwksRouter);  // GET /auth/.well-known/jwks.json
+app.use('/auth', issuerRouter); // POST /auth/token
 
 app.use((req, res, next) => {
   const start = Date.now();
