@@ -1,0 +1,33 @@
+name: Mobile — OTA Multi-Channel Update
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Target channel (preview, staging, production)'
+        required: true
+        type: choice
+        options:
+          - preview
+          - staging
+          - production
+        default: 'preview'
+      message:
+        description: 'Update message'
+        required: false
+        default: 'CI: multi-channel update'
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '18' }
+      - name: Install EAS
+        run: npm i -g eas-cli
+      - name: OTA update to ${{ inputs.channel }}
+        env:
+          EAS_TOKEN: ${{ secrets.EAS_TOKEN }}
+        run: |
+          cd mobile-expo
+          eas update --branch ${{ inputs.channel }} --message "${{ inputs.message }}" --non-interactive
