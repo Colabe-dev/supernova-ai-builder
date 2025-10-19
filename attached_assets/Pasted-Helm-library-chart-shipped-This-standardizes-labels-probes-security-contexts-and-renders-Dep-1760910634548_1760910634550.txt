@@ -1,0 +1,65 @@
+Helm **library chart** shipped. This standardizes labels, probes, security contexts, and renders Deployment/Service/Ingress/HPA/PDB/NetworkPolicy via reusable macros.
+
+**Download:** [collab-helm-lib-20251019-214911.zip](sandbox:/mnt/data/collab-helm-lib-20251019-214911.zip)
+`sha256: f61da169f0cc9f3f4df69f8840d2956836fd61242afec8838e0eedc0f55f1e7a`
+
+## What’s inside
+
+* `charts/collab-lib/` (type: **library**)
+
+  * `templates/_helpers.tpl`: `collab.lib.labels`, `selectorLabels`, `podSecurityContext`, `containerSecurityContext`, `httpProbe`.
+  * `templates/workloads.tpl`: renderers
+
+    * `collab.lib.deployment`
+    * `collab.lib.service`
+    * `collab.lib.ingress`
+    * `collab.lib.hpa`
+    * `collab.lib.pdb`
+    * `collab.lib.networkPolicy`
+* `examples/supernova-server-consumer/` — minimal app chart that consumes the library.
+* `.github/workflows/helm-lib-publish.yml` — packages the lib and pushes to **GHCR OCI** (optional).
+
+## Integrate into your charts (fast)
+
+1. Place `charts/collab-lib/` alongside your app chart (or publish to OCI and reference it).
+2. Add dependency in your app `Chart.yaml`:
+
+```yaml
+dependencies:
+  - name: collab-lib
+    version: 0.1.0
+    repository: "file://../charts/collab-lib"   # or oci://ghcr.io/<org>/helm
+```
+
+3. Use the macros in your templates:
+
+```yaml
+{{- $fullname := include "supernova.fullname" . -}}
+{{- include "collab.lib.deployment" (dict
+  "root" .,
+  "name" $fullname,
+  "image" (printf "%s:%s" .Values.image.repository .Values.image.tag),
+  "containerPort" .Values.service.targetPort,
+  "env" (list
+    (dict "configMapRef" (dict "name" (printf "%s-env" $fullname)))
+    (dict "secretRef" (dict "name" (printf "%s-secrets" $fullname)))
+  ),
+  "tokensConfigName" (printf "%s-tokens" $fullname),
+  "resources" .Values.resources,
+  "readiness" (dict "path" "/healthz" "port" "http" "initialDelaySeconds" 5),
+  "liveness"  (dict "path" "/healthz" "port" "http" "initialDelaySeconds" 10)
+) ) }}
+```
+
+…and the matching `service`, `ingress`, `hpa`, `pdb`, `networkPolicy` includes as needed (see the README + example).
+
+## Publish to OCI (optional)
+
+```bash
+helm package charts/collab-lib --destination dist
+helm push dist/collab-lib-0.1.0.tgz oci://ghcr.io/<org>/helm
+```
+
+Then switch your dependency `repository:` to `oci://ghcr.io/<org>/helm`.
+
+If you want me to **refactor your current `supernova-server` chart** to use this library (one commit patch), say **“apply lib to server chart”** and I’ll ship a drop-in patch.
