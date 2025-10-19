@@ -1,0 +1,62 @@
+Shipped. **Sprint 3 — Approvals & PRs (overlay)** is ready for your React SPA + Express stack.
+
+**Download:** [supernova-sprint3-approvals-overlay-20251019-190328.zip](sandbox:/mnt/data/supernova-sprint3-approvals-overlay-20251019-190328.zip)
+
+### What you get
+
+* `server/approvalsRoutes.js` — Approvals API (submit/list/approve/reject) with JWT guard + dev bypass.
+* `server/snippets/devRoutes-save-snapshot.patch.md` — drop-in replacement for your `/api/dev/fs` save handler (adds snapshots + metadata).
+* `client/src/pages/Approvals.tsx` — selectable queue + approve/reject UI.
+* `client/src/api/approvals.ts` — thin API wrapper.
+* `client/src/components/DiffSubmitBar.tsx` — “Submit for approval” bar for your `/diff` page.
+* `env/.env.sample.append` — env keys to add.
+
+### Wire-up (fast path)
+
+1. **Install deps**
+
+```bash
+npm i simple-git jsonwebtoken undici
+```
+
+2. **Server**
+
+* Mount approvals routes in `server/index.js`:
+
+```js
+import approvalsRoutes from "./approvalsRoutes.js";
+app.use("/api", approvalsRoutes);
+```
+
+* Open your `server/devRoutes.js` and replace the **save handler** with the snippet from:
+  `server/snippets/devRoutes-save-snapshot.patch.md`
+
+3. **Client**
+
+* Add a route `/approvals` that renders `client/src/pages/Approvals.tsx`.
+* On `/diff`, render `<DiffSubmitBar selectedIds={ids} />` wherever you track selections.
+
+4. **Env**
+   Append the keys from `env/.env.sample.append` to your `.env`:
+
+```
+APP_JWT_SECRET=dev-secret
+DEV_APPROVALS_OPEN=true
+GIT_REMOTE=origin
+GIT_MAIN=main
+# Optional GitHub PR path:
+GIT_PR_PROVIDER=github
+GIT_REPO_SLUG=owner/repo
+GITHUB_TOKEN=
+```
+
+### Flow to verify
+
+* Edit files in **/dev** → diffs + snapshots appear.
+* On **/diff**, pick changes and **Submit for approval**.
+* Go to **/approvals**, select pending items:
+
+  * **Approve** → branch `approval/<ts>` pushed, PR opens if GitHub env set.
+  * **Reject** → snapshots removed.
+
+Want me to also ship a tiny **router patch** for your SPA (adds `/approvals`, updates `/diff` selection state), or push **S3 mobile CI** next?
