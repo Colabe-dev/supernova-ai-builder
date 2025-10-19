@@ -70,3 +70,38 @@ export type InsertAgentRun = z.infer<typeof insertAgentRunSchema>;
 
 export type Approval = typeof approvals.$inferSelect;
 export type InsertApproval = z.infer<typeof insertApprovalSchema>;
+
+// Sprint 3: Manual diff approval types
+export const snapshots = pgTable("snapshots", {
+  id: varchar("id").primaryKey(),
+  diffId: text("diff_id").notNull(), // matches the diff file ID
+  path: text("path").notNull(),
+  previousContent: text("previous_content"),
+  newContent: text("new_content").notNull(),
+  timestamp: timestamp("timestamp").notNull().defaultNow(),
+});
+
+export const diffApprovals = pgTable("diff_approvals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  snapshotIds: text("snapshot_ids").array().notNull(), // Array of snapshot IDs
+  status: text("status").notNull().default('pending'), // 'pending' | 'approved' | 'rejected'
+  branchName: text("branch_name"),
+  prUrl: text("pr_url"),
+  comment: text("comment"),
+  submittedBy: text("submitted_by").notNull().default('dev'),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertSnapshotSchema = createInsertSchema(snapshots);
+export const insertDiffApprovalSchema = createInsertSchema(diffApprovals).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type Snapshot = typeof snapshots.$inferSelect;
+export type InsertSnapshot = z.infer<typeof insertSnapshotSchema>;
+
+export type DiffApproval = typeof diffApprovals.$inferSelect;
+export type InsertDiffApproval = z.infer<typeof insertDiffApprovalSchema>;

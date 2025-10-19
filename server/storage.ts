@@ -7,6 +7,10 @@ import {
   type InsertAgentRun,
   type Approval,
   type InsertApproval,
+  type Snapshot,
+  type InsertSnapshot,
+  type DiffApproval,
+  type InsertDiffApproval,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -29,6 +33,17 @@ export interface IStorage {
   getApproval(id: string): Promise<Approval | undefined>;
   createApproval(approval: InsertApproval): Promise<Approval>;
   updateApproval(id: string, updates: Partial<Approval>): Promise<Approval | undefined>;
+
+  // Sprint 3: Snapshots & Diff Approvals
+  getSnapshots(): Promise<Snapshot[]>;
+  getSnapshot(id: string): Promise<Snapshot | undefined>;
+  createSnapshot(snapshot: InsertSnapshot): Promise<Snapshot>;
+  deleteSnapshot(id: string): Promise<boolean>;
+
+  getDiffApprovals(): Promise<DiffApproval[]>;
+  getDiffApproval(id: string): Promise<DiffApproval | undefined>;
+  createDiffApproval(approval: InsertDiffApproval): Promise<DiffApproval>;
+  updateDiffApproval(id: string, updates: Partial<DiffApproval>): Promise<DiffApproval | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -36,12 +51,16 @@ export class MemStorage implements IStorage {
   private templates: Map<string, Template>;
   private agentRuns: Map<string, AgentRun>;
   private approvals: Map<string, Approval>;
+  private snapshots: Map<string, Snapshot>;
+  private diffApprovals: Map<string, DiffApproval>;
 
   constructor() {
     this.projects = new Map();
     this.templates = new Map();
     this.agentRuns = new Map();
     this.approvals = new Map();
+    this.snapshots = new Map();
+    this.diffApprovals = new Map();
     this.seedTemplates();
   }
 
@@ -179,6 +198,69 @@ export class MemStorage implements IStorage {
 
     const updated = { ...approval, ...updates };
     this.approvals.set(id, updated);
+    return updated;
+  }
+
+  // Sprint 3: Snapshots
+  async getSnapshots(): Promise<Snapshot[]> {
+    return Array.from(this.snapshots.values()).sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+  }
+
+  async getSnapshot(id: string): Promise<Snapshot | undefined> {
+    return this.snapshots.get(id);
+  }
+
+  async createSnapshot(insertSnapshot: InsertSnapshot): Promise<Snapshot> {
+    const snapshot: Snapshot = {
+      ...insertSnapshot,
+      previousContent: insertSnapshot.previousContent ?? null,
+      timestamp: new Date(),
+    };
+    this.snapshots.set(snapshot.id, snapshot);
+    return snapshot;
+  }
+
+  async deleteSnapshot(id: string): Promise<boolean> {
+    return this.snapshots.delete(id);
+  }
+
+  // Sprint 3: Diff Approvals
+  async getDiffApprovals(): Promise<DiffApproval[]> {
+    return Array.from(this.diffApprovals.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
+  async getDiffApproval(id: string): Promise<DiffApproval | undefined> {
+    return this.diffApprovals.get(id);
+  }
+
+  async createDiffApproval(insertDiffApproval: InsertDiffApproval): Promise<DiffApproval> {
+    const id = randomUUID();
+    const now = new Date();
+    const approval: DiffApproval = {
+      ...insertDiffApproval,
+      status: insertDiffApproval.status ?? "pending",
+      branchName: insertDiffApproval.branchName ?? null,
+      prUrl: insertDiffApproval.prUrl ?? null,
+      comment: insertDiffApproval.comment ?? null,
+      submittedBy: insertDiffApproval.submittedBy ?? "dev",
+      id,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.diffApprovals.set(id, approval);
+    return approval;
+  }
+
+  async updateDiffApproval(id: string, updates: Partial<DiffApproval>): Promise<DiffApproval | undefined> {
+    const approval = this.diffApprovals.get(id);
+    if (!approval) return undefined;
+
+    const updated = { ...approval, ...updates, updatedAt: new Date() };
+    this.diffApprovals.set(id, updated);
     return updated;
   }
 }
