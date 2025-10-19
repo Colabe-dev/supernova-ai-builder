@@ -16,19 +16,29 @@ export function verifyHMAC(payload, signature, secret) {
     return false;
   }
 
-  const body = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(body)
-    .digest('hex');
+  try {
+    const body = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
+    const expected = crypto
+      .createHmac('sha256', secret)
+      .update(body)
+      .digest('hex');
 
-  // Support both "sha256=<hash>" and "<hash>" formats
-  const provided = signature.startsWith('sha256=')
-    ? signature.slice(7)
-    : signature;
+    // Support both "sha256=<hash>" and "<hash>" formats
+    const provided = signature.startsWith('sha256=')
+      ? signature.slice(7)
+      : signature;
 
-  return crypto.timingSafeEqual(
-    Buffer.from(expected, 'hex'),
-    Buffer.from(provided, 'hex')
-  );
+    // Validate hex format and length before timingSafeEqual
+    if (!/^[0-9a-fA-F]+$/.test(provided) || provided.length !== expected.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(
+      Buffer.from(expected, 'hex'),
+      Buffer.from(provided, 'hex')
+    );
+  } catch (err) {
+    // Defensively handle any malformed signature errors
+    return false;
+  }
 }

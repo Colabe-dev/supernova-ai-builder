@@ -4,18 +4,20 @@
 Supernova is an intelligent application builder platform that uses AI-powered agents (Planner, Implementer, Tester, Fixer) to scaffold, build, and deploy web and mobile applications. The platform emphasizes generating production-ready code with an approvals workflow for reviewing changes. Its business vision is to streamline app development through AI, offering a robust tool for creating web and mobile applications with a focus on high-quality frontend and design.
 
 ## Recent Changes
-- **2025-10-19 (Sprint 4 Add-ons)**: Entitlements System + Multi-Channel Deployment ✅ **PRODUCTION-READY**
-  - ✅ **Entitlements Infrastructure**: Complete coins & subscriptions tracking system with purchase history
-  - ✅ **Storage Layer**: Added entitlements Map to MemStorage with create/get/update methods; updated IStorage interface
-  - ✅ **Schema**: New entitlements table (profileId, coins balance/total/purchases, subscriptions plan/status/startedAt)
-  - ✅ **API Routes**: GET /api/entitlements/:profileId, POST /api/entitlements/grant, POST /api/webhooks/collabpay
-  - ✅ **IAP Integration**: Enhanced Google/Apple verification to auto-create entitlements with profileId, grantType, purchaseId tracking
-  - ✅ **Webhook Support**: CollabPay webhook endpoint with signature verification (COLLAB_PAY_WEBHOOK_SECRET)
+- **2025-10-19 (Sprint 4 Add-ons - Postgres Migration)**: Postgres-Backed Entitlements + Multi-Channel Deployment ✅ **PRODUCTION-READY**
+  - ✅ **Postgres Database**: Migrated from in-memory to Replit Postgres with transactional integrity
+  - ✅ **Database Schema**: ent_balances (current state), ent_ledger (append-only log), ent_subscriptions (lifecycle tracking)
+  - ✅ **Migrations**: Auto-tracked schema_migrations with 001_init.sql and 002_indexes.sql
+  - ✅ **Idempotency**: Unique external_ref constraint prevents duplicate credits; handles concurrent requests gracefully
+  - ✅ **Transactional Layer**: server/entitlements/db.js with BEGIN/COMMIT/ROLLBACK for data consistency
+  - ✅ **API Routes**: GET /api/entitlements/:profileId (with purchase history), POST /api/entitlements/grant (coins/subscriptions/revoke)
+  - ✅ **Webhook Router**: server/entitlements/webhooks.db.js mounted before express.json() for raw body HMAC verification
+  - ✅ **Security Hardening**: Concurrent idempotency (handles Postgres error 23505), malformed HMAC signature defense
+  - ✅ **IAP Integration**: Google/Apple verification creates entitlements with profileId validation and DB persistence
   - ✅ **Multi-Channel EAS**: Added staging channel to eas.json; GitHub workflow for preview/staging/production OTA updates
-  - ✅ **Server Routes**: server/entitlements/routes.js with grant fulfillment; enhanced server/iap/routes.real.js
-  - ✅ **Testing Complete**: All endpoints verified (GET entitlements, POST grant coins/subscriptions, webhooks)
-  - ✅ **Packages**: undici for webhook verification
-  - ✅ **Configuration**: Updated .env.example with COLLAB_PAY_WEBHOOK_SECRET
+  - ✅ **Testing Complete**: Idempotency verified, subscriptions lifecycle tested, webhooks process all events correctly
+  - ✅ **Packages**: pg for Postgres, undici for webhook verification
+  - ✅ **Files**: server/db/migrate.mjs (migration runner), server/entitlements/db.js, routes.db.js, webhooks.db.js, hmac.js
 
 - **2025-10-19 (Sprint 4)**: Mobile Infrastructure + Sentry + IAP Verification + Observability ✅ **PRODUCTION-READY**
   - ✅ **Mobile Base (Sprint 3)**: Expo SDK 51 app structure with design token integration
@@ -57,9 +59,9 @@ Supernova is an intelligent application builder platform that uses AI-powered ag
 The frontend is built with React, Wouter for routing, TanStack Query for data fetching, and Shadcn UI components. It features a modular structure including pages for landing, dashboard, project details, a dev console, diff viewer, and approvals workflow. A custom brand system manages runtime design tokens via CSS variables and SSE for live updates, supporting layout primitives like Container, Stack, Grid, Card, and Button. The current visual identity is "Collab Creative Studio Neon Design" with vibrant neon colors, animated backgrounds, glow effects, gradient text, and glassmorphic cards.
 
 ### Backend
-The backend, built with Express, handles core API endpoints for projects, templates, agents, approvals, in-app purchases, and entitlements. It includes a dev-routes module for file system access, terminal execution, and design token management. The IAP routes provide production-ready verification for Google Play (via Android Publisher v3 API) and Apple App Store (via StoreKit 2 JWS verification), with automatic entitlement grant fulfillment. The entitlements system tracks user coins (balance, total, purchases) and subscriptions (plan, status) with webhook support for CollabPay.
+The backend, built with Express, handles core API endpoints for projects, templates, agents, approvals, in-app purchases, and entitlements. It includes a dev-routes module for file system access, terminal execution, and design token management. The IAP routes provide production-ready verification for Google Play (via Android Publisher v3 API) and Apple App Store (via StoreKit 2 JWS verification), with automatic entitlement grant fulfillment to Postgres. The entitlements system uses **Postgres** (Replit-hosted Neon) for persistent storage with transactional integrity, tracking coins (balance, total, append-only ledger), subscriptions (plan, status, lifecycle), and purchase history. Idempotency is enforced via unique external_ref constraints with graceful concurrent request handling.
 
-The observability stack includes Pino for structured JSON logging with pino-http middleware, optional Sentry integration for error tracking, and centralized configuration management via server/env/index.js. Security middleware (Helmet, CORS, rate limiting) provides defense-in-depth hardening. Design tokens are validated using an AJV schema. The system uses an in-memory storage solution for data persistence.
+The observability stack includes Pino for structured JSON logging with pino-http middleware, optional Sentry integration for error tracking, and centralized configuration management via server/env/index.js. Security middleware (Helmet, CORS, rate limiting) provides defense-in-depth hardening. Design tokens are validated using an AJV schema. **Data persistence** uses Postgres for entitlements and in-memory storage for other application data.
 
 **Logging & Redaction Policy**: All request logging uses custom pino-http serializers that whitelist only safe headers (user-agent, content-type, accept, host, x-forwarded-for, x-forwarded-proto) and redact sensitive query parameters (token, api_key, password, auth, secret) in development mode. In production, ALL query parameters are fully redacted. Authorization, Cookie, and other sensitive headers are never logged. The centralized error handler applies the same redaction strategy to prevent data leakage during exception logging.
 

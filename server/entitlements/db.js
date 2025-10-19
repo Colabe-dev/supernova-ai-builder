@@ -113,6 +113,15 @@ export async function grantCoins(profileId, amount, reason, source, externalRef 
     };
   } catch (err) {
     await client.query('ROLLBACK');
+    
+    // Handle concurrent duplicate externalRef (unique constraint violation)
+    // Error code 23505 = unique_violation in Postgres
+    if (err.code === '23505' && externalRef) {
+      // Concurrent request with same externalRef - treat as idempotent success
+      const balance = await getEntitlements(profileId);
+      return balance.coins;
+    }
+    
     throw err;
   } finally {
     client.release();
