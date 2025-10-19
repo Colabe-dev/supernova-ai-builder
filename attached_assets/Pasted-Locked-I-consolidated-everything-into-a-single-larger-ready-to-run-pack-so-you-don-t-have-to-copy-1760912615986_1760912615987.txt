@@ -1,0 +1,65 @@
+Locked. I consolidated everything into a single, larger, ready-to-run pack so you don’t have to copy/paste across many files.
+
+**Download:** [supernova-builder-all-in-one-20251019-221938.zip](sandbox:/mnt/data/supernova-builder-all-in-one-20251019-221938.zip)
+`sha256: eeb66b64beb0afbaecaa4b305e770119c3478fa536661e0f84cadd21b83b71`
+
+# What’s inside (one repo)
+
+```
+supernova-builder/
+  server/                 # Express API: /dev fs, diffs, tokens, terminal (whitelist), SSE, /healthz
+  client/                 # Vite + React + Monaco: /dev console, /diff viewer, design mode, live preview
+  mobile-expo/            # Expo skeleton (kept minimal; you’ll expand in Sprints)
+  deploy/helm/...         # Minimal Helm chart (+ Helmfile envs) for quick k8s deploys
+  helmfile/...            # dev/staging/prod environments
+  README.md               # quick start + security defaults
+```
+
+# How to run (bug-free path)
+
+1. Server
+
+```bash
+cd server
+npm install
+npm run dev   # http://localhost:3001
+```
+
+2. Client
+
+```bash
+cd client
+npm install
+npm run dev   # http://localhost:5173  (proxies /api to :3001)
+```
+
+3. Optional: single-process preview build
+
+```bash
+cd client && npm run build
+# copy dist into server/public (or adjust server to serve from /public)
+```
+
+# What you get (Sprint 2/3 core)
+
+* **Dev Console (/dev):** file tree (allowlist), Monaco editor, save with unified diffs, live preview via SSE, terminal (strict whitelist).
+* **Diffs (/diff):** timestamped unified diffs (persisted to `server/.supernova/diffs.json`).
+* **Design tokens:** GET/POST `/api/design/tokens` → apply as CSS vars in client; instant theme updates.
+* **Security rails:** dev-open auth by default; path normalization; rate limits; command whitelist; production mode disables dev FS & terminal routes.
+* **Health:** `/healthz` ready for probes.
+
+# Why this is “bigger files, fewer steps”
+
+* One ZIP, one repo layout.
+* Client and server already wired (Vite dev proxy to server).
+* Tokens, diffs, SSE, and terminal are pre-integrated.
+* Minimal Helm + Helmfile included to deploy as a single service when you’re ready.
+
+# Production notes (to go live safely)
+
+* Set real secrets (`DATABASE_URL`, `REDIS_URL`, `AUTH_*`, `COLLAB_PAY_*`, Sentry DSN) before deploying.
+* Flip `DEV_AUTH_OPEN=false` for prod.
+* Consider swapping JWT verifier to JWKS (we kept HS256 dev verifier to reduce dependencies).
+* Terminal & dev FS endpoints are already disabled in `NODE_ENV=production`.
+
+If you want me to also include the **full collab Helm library** + migrate/seed hooks inside this single repo (so infra + app ship together), say **“merge infra into kit”** and I’ll append the previously shipped Helm library and hooks into this ZIP structure.

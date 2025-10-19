@@ -1,0 +1,72 @@
+Yes—this “all-in-one” pack lines up with what we built before. For Sprints 1–3 it’s drop-in compatible, and the APIs/UX are the same, so you can keep moving without rewiring.
+
+# Compatibility map
+
+* **/dev console**: same FS allowlist (`client/src`, `server`, `shared`, `public`), same path-normalization guard, same terminal **whitelist** (`node -v`, `npm -v`, `npm run build`, `npm run lint`), same SSE auto-refresh.
+* **/diff viewer**: same unified diff capture → persisted in `server/.supernova/diffs.json`.
+* **Design tokens**: same API (`GET/POST /api/design/tokens`) and same on-disk path (`server/design.tokens.json`), client applies CSS vars like before.
+* **Prod hardening**: dev FS + terminal disabled when `NODE_ENV=production` (same behavior).
+* **Mobile**: Expo skeleton present (consistent with Sprint 3 base).
+
+# What’s new vs. your previous state
+
+* Everything lives in **one repo/zip** with a clean local dev path and a minimal Helm + Helmfile so you can deploy quickly.
+* It does **not** yet embed the advanced infra we also built (collab-lib chart + migrate/seed hooks). That’s deliberate to keep this pack small. If you want those inside this repo, I can merge them in one shot.
+
+# How to connect it to what you already had (5 steps)
+
+1. **Drop in your server features**
+
+   * If you already added Security Pro (JWKS/JWT verifier, entitlements, webhooks), copy those modules into `server/src/...`. The app is ESM (`"type":"module"`), so imports stay the same.
+2. **Bring over your design theme**
+
+   * Copy your existing `design.tokens.json` to `server/` (overwrite). The client will pick it up and re-skin automatically.
+3. **Preserve diffs (optional)**
+
+   * If you have an older `server/.supernova/diffs.json`, copy it to keep history visible under `/diff`.
+4. **Wire local env**
+
+   * Duplicate `server/.env.example` → `.env`. Keep `DEV_AUTH_OPEN=true` for local; set `false` in staging/prod.
+5. **Run the exact same flows**
+
+   * `server`: `npm i && npm run dev` ([http://localhost:3001](http://localhost:3001))
+   * `client`: `npm i && npm run dev` ([http://localhost:5173](http://localhost:5173) → proxies `/api` to :3001)
+
+# Quick validation (2 minutes)
+
+```bash
+# Health
+curl -s http://localhost:3001/healthz
+
+# FS list & read
+curl -s "http://localhost:3001/api/dev/fs/list?path=client/src" | jq .
+# Save a file → watch /diff populate and preview iframe refresh
+curl -s -X POST http://localhost:3001/api/dev/fs/write \
+  -H 'content-type: application/json' \
+  -d '{"path":"client/src/main.jsx","content":"// test change"}'
+
+# Tokens round-trip
+curl -s http://localhost:3001/api/design/tokens | jq .
+curl -s -X POST http://localhost:3001/api/design/tokens -H 'content-type: application/json' \
+  -d '{"meta":{"brand":"Supernova"},"theme":{"bg":"#101418","text":"#fff","primary":"#ffd02e"}}'
+```
+
+Open `/dev` and `/diff` in the client—behavior should match exactly what you had.
+
+# What’s *not* in this pack (so you’re not surprised)
+
+* **Collab-lib Helm library** and **migrate/seed hooks** (we shipped those separately).
+* **Collab Pay** webhook + issuer wiring (copy your existing handlers into `server/src/...` if you already implemented them).
+* **Mobile EAS CI** (we can add it once the server is green).
+
+# If you want zero drift with the infra we built
+
+Say **merge infra into kit** and I’ll embed:
+
+* The `collab-lib` Helm **library** under `deploy/helm/supernova-server/charts/collab-lib/`
+* The **migration** and **seed** Helm hooks (with exponential retry)
+* The Helmfile envs aligned to that library chart
+
+That gives you a single repo containing **app + dev console + tokens + infra** end-to-end.
+
+If anything behaves differently as you run it, tell me the file/path and I’ll patch it immediately.
