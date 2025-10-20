@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Zap, Brain, CheckCircle, Code2, Smartphone, Rocket, Sparkles } from "lucide-react";
+import { Zap, Brain, CheckCircle, Code2, Smartphone, Rocket, Sparkles, X, Check } from "lucide-react";
 import { SharedHeader } from "@/components/shared-header";
 
 export default function Landing() {
@@ -133,6 +133,73 @@ export default function Landing() {
                 </CardContent>
               </Card>
             ))}
+          </div>
+        </section>
+
+        <section className="container px-6 py-16">
+          <div className="text-center space-y-4 mb-12">
+            <h2 className="text-3xl font-semibold gradient-text" data-testid="comparison-heading">Why Supernova's Swarm Beats Everything Else</h2>
+          </div>
+          <div className="max-w-5xl mx-auto">
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card className="neon-card" style={{ background: 'rgba(255, 0, 0, 0.05)', borderColor: 'rgba(255, 0, 0, 0.3)' }} data-testid="card-single-ai">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: 'rgba(255, 0, 0, 0.2)' }}>
+                      <X className="h-5 w-5" style={{ color: 'rgba(255, 100, 100, 0.9)' }} />
+                    </div>
+                    <h3 className="text-xl font-semibold" style={{ color: 'rgba(255, 100, 100, 0.9)' }}>Single AI Tools</h3>
+                  </div>
+                  <div className="space-y-6">
+                    <div data-testid="comparison-single-1">
+                      <h4 className="font-semibold mb-2" style={{ color: 'rgba(255, 255, 255, 0.8)' }}>Lone Worker</h4>
+                      <p className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.6)' }}>One AI trying to do everything</p>
+                    </div>
+                    <div data-testid="comparison-single-2">
+                      <h4 className="font-semibold mb-2" style={{ color: 'rgba(255, 255, 255, 0.8)' }}>Fragmented Output</h4>
+                      <p className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Inconsistent quality and patterns</p>
+                    </div>
+                    <div data-testid="comparison-single-3">
+                      <h4 className="font-semibold mb-2" style={{ color: 'rgba(255, 255, 255, 0.8)' }}>Rigid Solutions</h4>
+                      <p className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.6)' }}>Limited to predefined patterns</p>
+                    </div>
+                    <div data-testid="comparison-single-4">
+                      <h4 className="font-semibold mb-2" style={{ color: 'rgba(255, 255, 255, 0.8)' }}>Single Point of Failure</h4>
+                      <p className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.6)' }}>One AI, one perspective</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="neon-card" style={{ background: 'rgba(0, 255, 0, 0.05)', borderColor: 'rgba(0, 255, 0, 0.3)' }} data-testid="card-agent-swarm">
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: 'rgba(0, 255, 0, 0.2)' }}>
+                      <Check className="h-5 w-5 neon-text-green" />
+                    </div>
+                    <h3 className="text-xl font-semibold neon-text-green">Agent Swarm</h3>
+                  </div>
+                  <div className="space-y-6">
+                    <div data-testid="comparison-swarm-1">
+                      <h4 className="font-semibold mb-2 neon-text-cyan">Swarm Mind</h4>
+                      <p className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>Multiple specialists collaborating</p>
+                    </div>
+                    <div data-testid="comparison-swarm-2">
+                      <h4 className="font-semibold mb-2 neon-text-pink">Harmonized Code</h4>
+                      <p className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>Uniform quality across entire project</p>
+                    </div>
+                    <div data-testid="comparison-swarm-3">
+                      <h4 className="font-semibold mb-2 neon-text-yellow">Matrix Architecture</h4>
+                      <p className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>Dynamically adapts to your needs</p>
+                    </div>
+                    <div data-testid="comparison-swarm-4">
+                      <h4 className="font-semibold mb-2 neon-text-green">Cross-Validation</h4>
+                      <p className="text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>Multiple agents verify every decision</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </section>
 
