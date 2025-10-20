@@ -22,14 +22,16 @@ router.get('/pricing', (req, res) => {
 // POST /api/billing/checkout - Create checkout session
 router.post('/checkout', async (req, res) => {
   try {
-    const { productKey, metadata } = req.body;
-    
-    // TODO: Get profileId from authenticated session
-    // For now, use a placeholder or require it in request
-    const profileId = req.body.profileId || 'guest_' + Date.now();
+    const { productKey, profileId, metadata } = req.body;
 
     if (!productKey) {
       return res.status(400).json({ error: 'productKey is required' });
+    }
+
+    if (!profileId || profileId === 'undefined') {
+      return res.status(401).json({ 
+        error: 'Authentication required. Please provide a valid profileId.' 
+      });
     }
 
     // Include referral code from cookies if present
@@ -63,21 +65,32 @@ router.get('/entitlements/:profileId', async (req, res) => {
   try {
     const { profileId } = req.params;
     
-    // TODO: Implement actual entitlements lookup from DB
-    // For now, return mock data
+    if (!profileId || profileId === 'undefined') {
+      return res.status(400).json({ error: 'Valid profileId required' });
+    }
+
+    // Import DB functions
+    const { getEntitlements } = await import('../entitlements/db.js');
+    const { getLimits } = await import('../billing/products.js');
+    
+    const entitlements = await getEntitlements(profileId);
+    
+    // Determine plan from active subscriptions
+    const hasProSubscription = entitlements.subscriptions?.some(
+      sub => sub.plan === 'pro' && sub.status === 'active'
+    );
+    const plan = hasProSubscription ? 'pro' : 'free';
+    const features = getLimits(plan);
+
     res.json({
       profileId,
-      plan: 'free',
-      coins: { balance: 50, total: 50 },
-      subscriptions: [],
-      features: {
-        maxProjects: 3,
-        aiMinutesPerMonth: 50,
-        maxBuildsPerMonth: 10,
-      },
+      plan,
+      coins: entitlements.coins || { balance: 0, total: 0 },
+      subscriptions: entitlements.subscriptions || [],
+      features,
     });
   } catch (err) {
-    logger.error({ err }, 'Error fetching entitlements');
+    logger.error({ err, profileId: req.params.profileId }, 'Error fetching entitlements');
     res.status(500).json({ error: 'Failed to fetch entitlements' });
   }
 });

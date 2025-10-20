@@ -11,6 +11,18 @@ import { getProductBySKU } from '../billing/products.js';
 
 const router = express.Router();
 
+// In-memory event tracking for idempotency (use Redis/DB in production)
+const processedEvents = new Set();
+const EVENT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Periodic cleanup of old events
+setInterval(() => {
+  if (processedEvents.size > 10000) {
+    processedEvents.clear();
+    logger.info('Cleared webhook event cache');
+  }
+}, EVENT_TTL_MS);
+
 // POST /collab-pay - Enhanced webhook handler with SKU mapping
 router.post('/collab-pay', express.raw({ type: 'application/json' }), async (req, res) => {
   try {
@@ -19,8 +31,20 @@ router.post('/collab-pay', express.raw({ type: 'application/json' }), async (req
     const signature = req.headers['x-collab-signature'];
     const eventId = req.headers['x-collab-id'];
 
+    // Enforce signature verification - fail if secret not configured
+    if (!secret) {
+      logger.error('COLLAB_PAY_WEBHOOK_SECRET not configured - rejecting webhook');
+      return res.status(500).json({ ok: false, error: 'Webhook secret not configured' });
+    }
+
+    // Idempotency check
+    if (eventId && processedEvents.has(eventId)) {
+      logger.info({ eventId }, 'Duplicate webhook event - already processed');
+      return res.json({ ok: true, message: 'Already processed' });
+    }
+
     // Verify HMAC signature with timestamp tolerance
-    if (secret && signature && timestamp) {
+    if (signature && timestamp) {
       const now = Math.floor(Date.now() / 1000);
       const skewSec = Math.abs(now - parseInt(timestamp));
       const maxSkew = parseInt(process.env.WEBHOOK_MAX_SKEW_SEC || '300');
@@ -88,6 +112,11 @@ router.post('/collab-pay', express.raw({ type: 'application/json' }), async (req
       if (refCode) {
         logger.info({ refCode, amount_cents, profileId }, 'Payment with referral code');
         // TODO: Record referral conversion event
+      }
+
+      // Mark event as processed
+      if (eventId) {
+        processedEvents.add(eventId);
       }
 
       return res.json({ ok: true, granted: entitlements });
