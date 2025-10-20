@@ -19,6 +19,7 @@ import receiptsRoutes from "./routes/receipts.js";
 import lpmRoutes from "./routes/lpm.js";
 import intentRoutes from "./routes/intent.js";
 import healingRoutes from "./routes/healing.js";
+import swarmRoutes from "./routes/swarm.js";
 import { initChatWS } from "./chat/ws";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -52,6 +53,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/intent", intentRoutes);
   // Mount Healing routes (Sprint D - Self-Healing Engine)
   app.use("/api/healing", healingRoutes);
+  // Mount Swarm routes (Sprint E - Collaborative AI Swarm Intelligence)
+  app.use("/api/swarm", swarmRoutes);
   app.get("/api/projects", async (req, res) => {
     try {
       const projects = await storage.getProjects();
