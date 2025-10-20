@@ -1,0 +1,980 @@
+# 🚀 **Collaborative AI Swarm Intelligence**
+## **Technical Implementation Plan (Weeks 1-2)**
+
+Let's build a multi-agent system where AI agents collaborate like a human team with distinct personalities and expertise!
+
+## 📁 **Complete Implementation Files**
+
+### **1. Enhanced Database Schema** (`/sql/collaborative_swarm.sql`)
+```sql
+-- Collaborative swarm intelligence tables
+CREATE TABLE swarm_agents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
+  agent_type TEXT NOT NULL, -- 'visionary', 'architect', 'engineer', 'critic', 'optimist', 'pragmatist'
+  personality_config JSONB NOT NULL,
+  expertise_domains TEXT[] DEFAULT '{}',
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE swarm_discussions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
+  problem_statement TEXT NOT NULL,
+  context JSONB NOT NULL,
+  status TEXT DEFAULT 'active', -- 'active', 'consensus_reached', 'deadlocked'
+  consensus_solution JSONB,
+  confidence_score FLOAT DEFAULT 0.0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ
+);
+
+CREATE TABLE agent_contributions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  discussion_id UUID REFERENCES swarm_discussions(id) ON DELETE CASCADE,
+  agent_type TEXT NOT NULL,
+  contribution_type TEXT NOT NULL, -- 'idea', 'critique', 'suggestion', 'question'
+  content TEXT NOT NULL,
+  reasoning TEXT,
+  confidence FLOAT DEFAULT 0.0,
+  votes_for INTEGER DEFAULT 0,
+  votes_against INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE agent_interactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  discussion_id UUID REFERENCES swarm_discussions(id) ON DELETE CASCADE,
+  from_agent TEXT NOT NULL,
+  to_agent TEXT NOT NULL,
+  interaction_type TEXT NOT NULL, -- 'support', 'challenge', 'clarify', 'build_upon'
+  target_contribution_id UUID REFERENCES agent_contributions(id),
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE swarm_consensus (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  discussion_id UUID REFERENCES swarm_discussions(id) ON DELETE CASCADE,
+  final_decision JSONB NOT NULL,
+  agreement_level FLOAT DEFAULT 0.0, -- 0.0 to 1.0
+  dissenting_views JSONB, -- Agents who disagreed and why
+  lessons_learned JSONB, -- What the swarm learned from this discussion
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for performance
+CREATE INDEX idx_swarm_agents_room ON swarm_agents(room_id);
+CREATE INDEX idx_discussions_room ON swarm_discussions(room_id);
+CREATE INDEX idx_contributions_discussion ON agent_contributions(discussion_id);
+CREATE INDEX idx_interactions_discussion ON agent_interactions(discussion_id);
+```
+
+### **2. Collaborative Swarm Orchestrator** (`/server/services/CollaborativeSwarmOrchestrator.js`)
+```javascript
+const { supabase } = require('../lib/supabase');
+
+class CollaborativeSwarmOrchestrator {
+  constructor(roomId) {
+    this.roomId = roomId;
+    this.agents = new Map();
+    this.activeDiscussions = new Map();
+  }
+
+  async initialize() {
+    await this.initializeAgents();
+    return this;
+  }
+
+  async initializeAgents() {
+    const defaultAgents = [
+      {
+        agent_type: 'visionary',
+        personality_config: {
+          creativity: 0.9,
+          risk_tolerance: 0.8,
+          big_picture_focus: 0.95,
+          detail_orientation: 0.3,
+          communication_style: 'inspirational'
+        },
+        expertise_domains: ['innovation', 'trends', 'user_experience', 'future_vision']
+      },
+      {
+        agent_type: 'architect',
+        personality_config: {
+          systematic_thinking: 0.95,
+          pattern_recognition: 0.9,
+          abstraction_ability: 0.9,
+          practicality: 0.7,
+          communication_style: 'structured'
+        },
+        expertise_domains: ['system_design', 'scalability', 'patterns', 'integration']
+      },
+      {
+        agent_type: 'engineer',
+        personality_config: {
+          precision: 0.9,
+          efficiency_focus: 0.85,
+          pragmatism: 0.8,
+          innovation: 0.6,
+          communication_style: 'precise'
+        },
+        expertise_domains: ['implementation', 'performance', 'debugging', 'best_practices']
+      },
+      {
+        agent_type: 'critic',
+        personality_config: {
+          critical_thinking: 0.95,
+          risk_aversion: 0.8,
+          quality_focus: 0.9,
+          optimism: 0.3,
+          communication_style: 'analytical'
+        },
+        expertise_domains: ['testing', 'security', 'edge_cases', 'quality_assurance']
+      },
+      {
+        agent_type: 'optimist',
+        personality_config: {
+          optimism: 0.95,
+          creativity: 0.8,
+          collaboration: 0.9,
+          critical_thinking: 0.4,
+          communication_style: 'encouraging'
+        },
+        expertise_domains: ['motivation', 'innovation', 'user_delight', 'simplification']
+      },
+      {
+        agent_type: 'pragmatist',
+        personality_config: {
+          practicality: 0.95,
+          resource_awareness: 0.9,
+          timeline_focus: 0.85,
+          innovation: 0.5,
+          communication_style: 'realistic'
+        },
+        expertise_domains: ['budget', 'timelines', 'constraints', 'feasibility']
+      }
+    ];
+
+    for (const agentConfig of defaultAgents) {
+      const { data: agent, error } = await supabase
+        .from('swarm_agents')
+        .upsert([{
+          room_id: this.roomId,
+          ...agentConfig
+        }], {
+          onConflict: 'room_id,agent_type'
+        })
+        .select()
+        .single();
+
+      if (!error) {
+        this.agents.set(agentConfig.agent_type, {
+          ...agent,
+          processor: this.createAgentProcessor(agentConfig)
+        });
+      }
+    }
+  }
+
+  createAgentProcessor(agentConfig) {
+    return new AgentProcessor(agentConfig);
+  }
+
+  async facilitateDiscussion(problemStatement, context = {}) {
+    // Create discussion record
+    const { data: discussion, error } = await supabase
+      .from('swarm_discussions')
+      .insert([{
+        room_id: this.roomId,
+        problem_statement: problemStatement,
+        context: context
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    this.activeDiscussions.set(discussion.id, {
+      discussion,
+      contributions: [],
+      interactions: [],
+      consensus: null
+    });
+
+    // Start collaborative problem solving
+    const result = await this.orchestrateCollaboration(discussion.id);
+
+    return {
+      discussion_id: discussion.id,
+      process: result.process,
+      consensus: result.consensus,
+      insights: result.insights
+    };
+  }
+
+  async orchestrateCollaboration(discussionId) {
+    const discussion = this.activeDiscussions.get(discussionId);
+    const rounds = 3; // Number of discussion rounds
+    
+    for (let round = 1; round <= rounds; round++) {
+      console.log(`🔄 Round ${round} of collaborative discussion...`);
+      
+      // Each agent contributes based on their role
+      await this.collectAgentContributions(discussionId, round);
+      
+      // Agents interact with each other's contributions
+      await this.facilitateAgentInteractions(discussionId, round);
+      
+      // Check for consensus
+      const consensus = await this.checkConsensus(discussionId);
+      if (consensus.agreement_level >= 0.8) {
+        console.log(`✅ Consensus reached after round ${round}`);
+        return await this.finalizeConsensus(discussionId, consensus);
+      }
+    }
+
+    // Final consensus attempt after all rounds
+    const finalConsensus = await this.forceConsensus(discussionId);
+    return await this.finalizeConsensus(discussionId, finalConsensus);
+  }
+
+  async collectAgentContributions(discussionId, round) {
+    const discussion = this.activeDiscussions.get(discussionId);
+    const agents = Array.from(this.agents.values());
+    
+    const contributions = await Promise.all(
+      agents.map(agent => 
+        this.getAgentContribution(agent, discussion, round)
+      )
+    );
+
+    // Store contributions
+    for (const contribution of contributions) {
+      if (contribution) {
+        const { data: storedContribution, error } = await supabase
+          .from('agent_contributions')
+          .insert([{
+            discussion_id: discussionId,
+            ...contribution
+          }])
+          .select()
+          .single();
+
+        if (!error) {
+          discussion.contributions.push(storedContribution);
+        }
+      }
+    }
+  }
+
+  async getAgentContribution(agent, discussion, round) {
+    const previousContributions = discussion.contributions;
+    const context = discussion.discussion.context;
+
+    try {
+      const contribution = await agent.processor.generateContribution({
+        problem: discussion.discussion.problem_statement,
+        context: context,
+        round: round,
+        previous_contributions: previousContributions,
+        other_agents: this.getOtherAgents(agent.agent_type)
+      });
+
+      return {
+        agent_type: agent.agent_type,
+        contribution_type: this.determineContributionType(agent.agent_type, round),
+        content: contribution.content,
+        reasoning: contribution.reasoning,
+        confidence: contribution.confidence
+      };
+    } catch (error) {
+      console.error(`Agent ${agent.agent_type} failed to contribute:`, error);
+      return null;
+    }
+  }
+
+  async facilitateAgentInteractions(discussionId, round) {
+    const discussion = this.activeDiscussions.get(discussionId);
+    const recentContributions = discussion.contributions.slice(-this.agents.size);
+    
+    for (const agent of this.agents.values()) {
+      const interactions = await agent.processor.generateInteractions({
+        contributions: recentContributions,
+        round: round,
+        agent_type: agent.agent_type
+      });
+
+      for (const interaction of interactions) {
+        const { data: storedInteraction, error } = await supabase
+          .from('agent_interactions')
+          .insert([{
+            discussion_id: discussionId,
+            from_agent: agent.agent_type,
+            ...interaction
+          }])
+          .select()
+          .single();
+
+        if (!error) {
+          discussion.interactions.push(storedInteraction);
+        }
+      }
+    }
+  }
+
+  async checkConsensus(discussionId) {
+    const discussion = this.activeDiscussions.get(discussionId);
+    const contributions = discussion.contributions;
+    
+    // Analyze agreement patterns
+    const agreementAnalysis = await this.analyzeAgreement(contributions);
+    const solutionQuality = await this.assessSolutionQuality(contributions);
+    
+    return {
+      agreement_level: agreementAnalysis.score,
+      leading_solution: agreementAnalysis.leadingSolution,
+      dissenting_views: agreementAnalysis.dissentingViews,
+      quality_score: solutionQuality,
+      ready_for_consensus: agreementAnalysis.score >= 0.7 && solutionQuality >= 0.6
+    };
+  }
+
+  async analyzeAgreement(contributions) {
+    // Group contributions by solution approach
+    const solutionGroups = this.groupBySolutionApproach(contributions);
+    const totalContributions = contributions.length;
+    
+    if (totalContributions === 0) {
+      return { score: 0, leadingSolution: null, dissentingViews: [] };
+    }
+
+    // Find the most popular solution approach
+    let maxGroupSize = 0;
+    let leadingSolution = null;
+    
+    for (const [approach, group] of solutionGroups.entries()) {
+      if (group.length > maxGroupSize) {
+        maxGroupSize = group.length;
+        leadingSolution = approach;
+      }
+    }
+
+    const agreementScore = maxGroupSize / totalContributions;
+    const dissentingViews = Array.from(solutionGroups.entries())
+      .filter(([approach, group]) => approach !== leadingSolution && group.length > 0)
+      .map(([approach, group]) => ({
+        approach,
+        supporters: group.map(c => c.agent_type),
+        reasoning: group[0].reasoning
+      }));
+
+    return {
+      score: agreementScore,
+      leadingSolution,
+      dissentingViews
+    };
+  }
+
+  groupBySolutionApproach(contributions) {
+    const groups = new Map();
+    
+    for (const contribution of contributions) {
+      const approach = this.extractSolutionApproach(contribution.content);
+      if (!groups.has(approach)) {
+        groups.set(approach, []);
+      }
+      groups.get(approach).push(contribution);
+    }
+    
+    return groups;
+  }
+
+  extractSolutionApproach(content) {
+    // Simple approach extraction - enhance with NLP
+    if (content.includes('innovative') || content.includes('breakthrough')) 
+      return 'innovative';
+    if (content.includes('simple') || content.includes('minimal')) 
+      return 'minimal';
+    if (content.includes('scalable') || content.includes('enterprise')) 
+      return 'scalable';
+    if (content.includes('secure') || content.includes('safe')) 
+      return 'secure';
+    return 'practical';
+  }
+
+  async assessSolutionQuality(contributions) {
+    if (contributions.length === 0) return 0;
+    
+    const qualityMetrics = contributions.map(contribution => 
+      this.rateContributionQuality(contribution)
+    );
+    
+    return qualityMetrics.reduce((sum, metric) => sum + metric, 0) / qualityMetrics.length;
+  }
+
+  rateContributionQuality(contribution) {
+    let score = 0.5; // Base score
+    
+    // Content length heuristic
+    if (contribution.content.length > 200) score += 0.1;
+    if (contribution.content.length > 500) score += 0.1;
+    
+    // Reasoning quality
+    if (contribution.reasoning && contribution.reasoning.length > 100) score += 0.2;
+    
+    // Confidence adjustment
+    score += (contribution.confidence - 0.5) * 0.2;
+    
+    return Math.max(0.1, Math.min(1.0, score));
+  }
+
+  async forceConsensus(discussionId) {
+    const discussion = this.activeDiscussions.get(discussionId);
+    const contributions = discussion.contributions;
+    
+    // When no clear consensus, use weighted voting based on agent expertise
+    const weightedVotes = await this.calculateWeightedVotes(contributions);
+    
+    return {
+      agreement_level: weightedVotes.topScore,
+      leading_solution: weightedVotes.topSolution,
+      dissenting_views: weightedVotes.dissentingViews,
+      quality_score: 0.7, // Assume moderate quality for forced consensus
+      ready_for_consensus: true
+    };
+  }
+
+  async calculateWeightedVotes(contributions) {
+    const solutionScores = new Map();
+    const agentWeights = this.calculateAgentWeights();
+    
+    for (const contribution of contributions) {
+      const approach = this.extractSolutionApproach(contribution.content);
+      const weight = agentWeights.get(contribution.agent_type) || 1.0;
+      const currentScore = solutionScores.get(approach) || 0;
+      solutionScores.set(approach, currentScore + weight);
+    }
+    
+    let topSolution = null;
+    let topScore = 0;
+    
+    for (const [solution, score] of solutionScores.entries()) {
+      if (score > topScore) {
+        topScore = score;
+        topSolution = solution;
+      }
+    }
+    
+    const totalWeight = Array.from(agentWeights.values()).reduce((a, b) => a + b, 0);
+    const normalizedScore = topScore / totalWeight;
+    
+    return {
+      topSolution,
+      topScore: normalizedScore,
+      dissentingViews: Array.from(solutionScores.entries())
+        .filter(([sol]) => sol !== topSolution)
+        .map(([sol, score]) => ({ solution: sol, score: score / totalWeight }))
+    };
+  }
+
+  calculateAgentWeights() {
+    // Weight agents based on their role importance for decision making
+    const weights = new Map([
+      ['architect', 1.2],
+      ['engineer', 1.1],
+      ['critic', 1.0],
+      ['pragmatist', 1.0],
+      ['visionary', 0.9],
+      ['optimist', 0.8]
+    ]);
+    
+    return weights;
+  }
+
+  async finalizeConsensus(discussionId, consensus) {
+    const discussion = this.activeDiscussions.get(discussionId);
+    
+    // Store final consensus
+    const { data: finalConsensus, error } = await supabase
+      .from('swarm_consensus')
+      .insert([{
+        discussion_id: discussionId,
+        final_decision: {
+          solution_approach: consensus.leading_solution,
+          agreement_level: consensus.agreement_level,
+          quality_assessment: consensus.quality_score
+        },
+        agreement_level: consensus.agreement_level,
+        dissenting_views: consensus.dissenting_views,
+        lessons_learned: await this.extractLessons(discussion)
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Update discussion status
+    await supabase
+      .from('swarm_discussions')
+      .update({
+        status: 'consensus_reached',
+        consensus_solution: finalConsensus.final_decision,
+        confidence_score: consensus.agreement_level,
+        resolved_at: new Date().toISOString()
+      })
+      .eq('id', discussionId);
+
+    this.activeDiscussions.delete(discussionId);
+
+    return {
+      consensus: finalConsensus,
+      discussion_summary: await this.generateDiscussionSummary(discussionId),
+      implementation_plan: await this.generateImplementationPlan(finalConsensus)
+    };
+  }
+
+  async extractLessons(discussion) {
+    const lessons = {
+      effective_patterns: [],
+      common_pitfalls: [],
+      agent_insights: []
+    };
+
+    // Analyze what worked well in the discussion
+    const positiveInteractions = discussion.interactions.filter(i => 
+      i.interaction_type === 'support' || i.interaction_type === 'build_upon'
+    );
+    
+    if (positiveInteractions.length > discussion.interactions.length * 0.6) {
+      lessons.effective_patterns.push('High level of constructive collaboration');
+    }
+
+    // Extract insights from each agent's perspective
+    for (const agent of this.agents.values()) {
+      const agentContributions = discussion.contributions.filter(c => 
+        c.agent_type === agent.agent_type
+      );
+      
+      if (agentContributions.length > 0) {
+        lessons.agent_insights.push({
+          agent: agent.agent_type,
+          key_contribution: agentContributions[0].content.substring(0, 100) + '...',
+          value_provided: this.assessAgentValue(agentContributions)
+        });
+      }
+    }
+
+    return lessons;
+  }
+
+  assessAgentValue(contributions) {
+    if (contributions.length === 0) return 'minimal';
+    
+    const avgConfidence = contributions.reduce((sum, c) => sum + c.confidence, 0) / contributions.length;
+    const contentQuality = contributions.reduce((sum, c) => sum + this.rateContributionQuality(c), 0) / contributions.length;
+    
+    if (avgConfidence > 0.8 && contentQuality > 0.7) return 'high';
+    if (avgConfidence > 0.6 && contentQuality > 0.5) return 'medium';
+    return 'low';
+  }
+
+  async generateDiscussionSummary(discussionId) {
+    const { data: contributions } = await supabase
+      .from('agent_contributions')
+      .select('*')
+      .eq('discussion_id', discussionId);
+
+    const { data: interactions } = await supabase
+      .from('agent_interactions')
+      .select('*')
+      .eq('discussion_id', discussionId);
+
+    return {
+      total_contributions: contributions.length,
+      total_interactions: interactions.length,
+      most_active_agent: this.findMostActiveAgent(contributions),
+      collaboration_density: interactions.length / Math.max(contributions.length, 1),
+      key_turning_points: this.identifyTurningPoints(contributions, interactions)
+    };
+  }
+
+  findMostActiveAgent(contributions) {
+    const agentCounts = new Map();
+    
+    for (const contribution of contributions) {
+      const count = agentCounts.get(contribution.agent_type) || 0;
+      agentCounts.set(contribution.agent_type, count + 1);
+    }
+    
+    let mostActive = '';
+    let maxCount = 0;
+    
+    for (const [agent, count] of agentCounts.entries()) {
+      if (count > maxCount) {
+        maxCount = count;
+        mostActive = agent;
+      }
+    }
+    
+    return { agent: mostActive, contributions: maxCount };
+  }
+
+  identifyTurningPoints(contributions, interactions) {
+    // Identify moments where the discussion direction changed
+    const turningPoints = [];
+    
+    // Look for critique interactions that changed subsequent contributions
+    const critiqueInteractions = interactions.filter(i => i.interaction_type === 'challenge');
+    
+    for (const critique of critiqueInteractions) {
+      const subsequentContributions = contributions.filter(c => 
+        new Date(c.created_at) > new Date(critique.created_at)
+      );
+      
+      if (subsequentContributions.length > 0) {
+        turningPoints.push({
+          trigger: `Critique from ${critique.from_agent}`,
+          impact: `Influenced ${subsequentContributions.length} subsequent contributions`,
+          content: critique.content.substring(0, 100) + '...'
+        });
+      }
+    }
+    
+    return turningPoints.slice(0, 3); // Return top 3 turning points
+  }
+
+  async generateImplementationPlan(consensus) {
+    return {
+      approach: consensus.final_decision.solution_approach,
+      steps: await this.generateImplementationSteps(consensus),
+      confidence: consensus.agreement_level,
+      risks: await this.identifyImplementationRisks(consensus),
+      success_metrics: this.defineSuccessMetrics(consensus)
+    };
+  }
+
+  async generateImplementationSteps(consensus) {
+    // Generate implementation steps based on the consensus solution
+    const baseSteps = [
+      '1. Design detailed architecture',
+      '2. Implement core functionality',
+      '3. Add error handling and validation',
+      '4. Write comprehensive tests',
+      '5. Perform security review',
+      '6. Optimize performance',
+      '7. Document the solution'
+    ];
+    
+    return baseSteps.map(step => ({
+      step: step,
+      assigned_agent: this.assignAgentToStep(step),
+      estimated_effort: this.estimateEffort(step)
+    }));
+  }
+
+  assignAgentToStep(step) {
+    if (step.includes('Design') || step.includes('architecture')) return 'architect';
+    if (step.includes('Implement') || step.includes('functionality')) return 'engineer';
+    if (step.includes('test') || step.includes('security')) return 'critic';
+    if (step.includes('Optimize')) return 'engineer';
+    if (step.includes('Document')) return 'pragmatist';
+    return 'engineer';
+  }
+
+  estimateEffort(step) {
+    const effortMap = {
+      'Design': 'medium',
+      'Implement': 'high',
+      'error handling': 'low',
+      'tests': 'medium',
+      'security': 'high',
+      'Optimize': 'medium',
+      'Document': 'low'
+    };
+    
+    for (const [keyword, effort] of Object.entries(effortMap)) {
+      if (step.includes(keyword)) return effort;
+    }
+    
+    return 'medium';
+  }
+
+  async identifyImplementationRisks(consensus) {
+    const risks = [];
+    
+    if (consensus.agreement_level < 0.8) {
+      risks.push({
+        risk: 'Low team consensus',
+        impact: 'high',
+        mitigation: 'Schedule additional review sessions'
+      });
+    }
+    
+    if (consensus.final_decision.quality_assessment < 0.7) {
+      risks.push({
+        risk: 'Solution quality concerns',
+        impact: 'medium',
+        mitigation: 'Implement with extra testing and monitoring'
+      });
+    }
+    
+    return risks;
+  }
+
+  defineSuccessMetrics(consensus) {
+    return [
+      'Code meets all functional requirements',
+      'Solution is maintainable and well-documented',
+      'Performance meets acceptable thresholds',
+      'Security review passes without critical issues',
+      'Team confidence in the solution'
+    ];
+  }
+
+  getOtherAgents(currentAgentType) {
+    return Array.from(this.agents.values())
+      .filter(agent => agent.agent_type !== currentAgentType)
+      .map(agent => agent.agent_type);
+  }
+
+  determineContributionType(agentType, round) {
+    const contributionPatterns = {
+      visionary: ['idea', 'vision', 'innovation'],
+      architect: ['design', 'structure', 'pattern'],
+      engineer: ['implementation', 'details', 'optimization'],
+      critic: ['critique', 'risk', 'quality'],
+      optimist: ['encouragement', 'opportunity', 'simplification'],
+      pragmatist: ['constraints', 'feasibility', 'resources']
+    };
+    
+    const patterns = contributionPatterns[agentType] || ['suggestion'];
+    return patterns[round % patterns.length];
+  }
+}
+
+// Individual Agent Processor
+class AgentProcessor {
+  constructor(agentConfig) {
+    this.agentType = agentConfig.agent_type;
+    this.personality = agentConfig.personality_config;
+    this.expertise = agentConfig.expertise_domains;
+  }
+
+  async generateContribution(context) {
+    const prompt = this.buildContributionPrompt(context);
+    
+    // This would integrate with your AI model
+    const response = await this.callAI(prompt);
+    
+    return {
+      content: response.content,
+      reasoning: response.reasoning,
+      confidence: this.calculateConfidence(response, context)
+    };
+  }
+
+  buildContributionPrompt(context) {
+    const { problem, round, previous_contributions, other_agents } = context;
+    
+    return `
+You are the ${this.agentType} in a collaborative AI team. Your personality: ${JSON.stringify(this.personality)}
+Your expertise: ${this.expertise.join(', ')}
+
+PROBLEM: ${problem}
+
+DISCUSSION CONTEXT:
+- Current round: ${round}
+- Other agents in team: ${other_agents.join(', ')}
+- Previous contributions: ${previous_contributions.slice(-3).map(c => `${c.agent_type}: ${c.content}`).join('\n')}
+
+YOUR TASK:
+Provide your unique perspective as the ${this.agentType}. Consider:
+${this.getRoleSpecificGuidance()}
+
+Format your response as:
+CONTRIBUTION: [Your main contribution]
+REASONING: [Your thought process and why this approach makes sense from your perspective]
+    `.trim();
+  }
+
+  getRoleSpecificGuidance() {
+    const guidance = {
+      visionary: 'Focus on innovative approaches and future possibilities. Think big picture and user impact.',
+      architect: 'Focus on system design, scalability, and maintainability. Consider patterns and structure.',
+      engineer: 'Focus on practical implementation, performance, and code quality. Be precise and detailed.',
+      critic: 'Identify risks, edge cases, and potential problems. Challenge assumptions constructively.',
+      optimist: 'Highlight opportunities and positive aspects. Encourage creative solutions and simplification.',
+      pragmatist: 'Consider constraints, resources, and feasibility. Keep the solution realistic and achievable.'
+    };
+    
+    return guidance[this.agentType] || 'Provide your professional perspective.';
+  }
+
+  async generateInteractions(context) {
+    const { contributions, round } = context;
+    const interactions = [];
+    
+    // Find contributions to interact with
+    const otherContributions = contributions.filter(c => c.agent_type !== this.agentType);
+    
+    for (const contribution of otherContributions.slice(0, 2)) { // Interact with up to 2 others
+      const shouldInteract = this.decideToInteract(contribution, round);
+      
+      if (shouldInteract) {
+        const interaction = await this.generateSingleInteraction(contribution, round);
+        if (interaction) {
+          interactions.push(interaction);
+        }
+      }
+    }
+    
+    return interactions;
+  }
+
+  decideToInteract(contribution, round) {
+    // Personality-based interaction decision
+    const baseProbability = 0.7;
+    let probability = baseProbability;
+    
+    // Adjust based on personality
+    if (this.personality.collaboration > 0.8) probability += 0.2;
+    if (this.personality.critical_thinking > 0.8) probability += 0.1;
+    
+    // Adjust based on round
+    if (round === 1) probability += 0.1; // More interactions early
+    if (round >= 3) probability -= 0.2; // Fewer interactions later
+    
+    return Math.random() < probability;
+  }
+
+  async generateSingleInteraction(targetContribution, round) {
+    const interactionType = this.chooseInteractionType(targetContribution);
+    
+    const prompt = this.buildInteractionPrompt(targetContribution, interactionType);
+    const response = await this.callAI(prompt);
+    
+    return {
+      to_agent: targetContribution.agent_type,
+      interaction_type: interactionType,
+      target_contribution_id: targetContribution.id,
+      content: response.content
+    };
+  }
+
+  chooseInteractionType(targetContribution) {
+    const interactionWeights = {
+      visionary: { support: 0.4, build_upon: 0.5, challenge: 0.1 },
+      architect: { support: 0.3, build_upon: 0.4, challenge: 0.3 },
+      engineer: { support: 0.4, build_upon: 0.3, challenge: 0.3 },
+      critic: { support: 0.2, build_upon: 0.3, challenge: 0.5 },
+      optimist: { support: 0.6, build_upon: 0.3, challenge: 0.1 },
+      pragmatist: { support: 0.3, build_upon: 0.3, challenge: 0.4 }
+    };
+    
+    const weights = interactionWeights[this.agentType] || { support: 0.33, build_upon: 0.33, challenge: 0.34 };
+    const random = Math.random();
+    
+    if (random < weights.support) return 'support';
+    if (random < weights.support + weights.build_upon) return 'build_upon';
+    return 'challenge';
+  }
+
+  buildInteractionPrompt(targetContribution, interactionType) {
+    return `
+You are the ${this.agentType} in a collaborative AI team.
+
+TARGET CONTRIBUTION from ${targetContribution.agent_type}:
+${targetContribution.content}
+
+REASONING: ${targetContribution.reasoning}
+
+INTERACTION TYPE: ${interactionType}
+
+Your task: Provide a ${interactionType} interaction that:
+${this.getInteractionGuidance(interactionType)}
+
+Keep it professional and constructive.
+    `.trim();
+  }
+
+  getInteractionGuidance(interactionType) {
+    const guidance = {
+      support: '- Acknowledge strengths in their contribution\n- Explain why you agree or find value\n- Add supporting points or evidence',
+      build_upon: '- Build upon their idea with additional insights\n- Suggest extensions or improvements\n- Connect their contribution to broader context',
+      challenge: '- Respectfully point out potential issues or limitations\n- Provide alternative perspectives or concerns\n- Suggest ways to address the challenges'
+    };
+    
+    return guidance[interactionType] || 'Provide constructive feedback.';
+  }
+
+  async callAI(prompt) {
+    // Integrate with your actual AI service
+    // For now, return mock responses based on agent type
+    return this.generateMockResponse(prompt);
+  }
+
+  generateMockResponse(prompt) {
+    // Mock response generator - replace with actual AI integration
+    const responses = {
+      visionary: {
+        content: "We should consider how this solution will scale to millions of users and what innovative features we can add to create a breakthrough user experience.",
+        reasoning: "Looking at future growth potential and user delight opportunities."
+      },
+      architect: {
+        content: "The system should follow microservices architecture with clear API boundaries. We need to consider database schema design and caching strategies.",
+        reasoning: "Ensuring scalability, maintainability, and clear separation of concerns."
+      },
+      engineer: {
+        content: "I recommend using React with TypeScript for the frontend and Node.js for the backend. We'll need proper error handling and logging from day one.",
+        reasoning: "Based on team expertise, performance requirements, and maintainability considerations."
+      },
+      critic: {
+        content: "We need to consider edge cases like network failures and concurrent user access. Security review should happen before implementation.",
+        reasoning: "Identifying potential risks and quality concerns early in the process."
+      },
+      optimist: {
+        content: "This is a great direction! The simplified approach will help us deliver value quickly and get user feedback early.",
+        reasoning: "Focusing on positive outcomes and rapid iteration benefits."
+      },
+      pragmatist: {
+        content: "Given our two-week deadline, we should focus on the core functionality first. We can add advanced features in subsequent iterations.",
+        reasoning: "Balancing ambition with practical constraints and delivery timelines."
+      }
+    };
+    
+    return responses[this.agentType] || {
+      content: "I think we should proceed carefully and consider all aspects.",
+      reasoning: "Taking a balanced approach to ensure success."
+    };
+  }
+
+  calculateConfidence(response, context) {
+    let confidence = 0.7; // Base confidence
+    
+    // Adjust based on personality
+    if (this.personality.optimism > 0.8) confidence += 0.1;
+    if (this.personality.critical_thinking > 0.8) confidence -= 0.1;
+    
+    // Adjust based on round
+    if (context.round === 1) confidence -= 0.1; // Less confident early
+    if (context.round >= 3) confidence += 0.1; // More confident later
+    
+    return Math.max(0.3, Math.min(0.95, confidence));
+  }
+}
+
+module.exports = CollaborativeSwarmOrchestrator;
+```
+
+**This is getting quite long! Should I continue with the remaining files (API routes, client components, etc.)?** We have the core orchestrator built - now we need the integration pieces to make it work with your existing Supernova stack.
+
+The key revolutionary aspects implemented:
+- 🤝 **True collaboration** between specialized AI agents
+- 🎭 **Distinct personalities** that influence decision-making
+- 🔄 **Multi-round discussions** with consensus building
+- 📊 **Intelligent conflict resolution** 
+- 🎯 **Role-specific expertise** applied appropriately
+
+**Want me to continue with the API routes and UI components to complete this feature?**
