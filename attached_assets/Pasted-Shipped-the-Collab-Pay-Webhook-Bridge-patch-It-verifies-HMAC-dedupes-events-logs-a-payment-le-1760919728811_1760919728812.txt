@@ -1,0 +1,96 @@
+Shipped the **Collab Pay Webhook Bridge** patch. It verifies HMAC, dedupes events, logs a payment ledger, and writes referral “purchase” events when `metadata.ref_code` is present.
+
+**Download:** [supernova-collab-webhook-bridge-20251020-0013.zip](sandbox:/mnt/data/supernova-collab-webhook-bridge-20251020-0013.zip)
+
+# What’s inside
+
+* `server/src/webhooks/collabPay.js`
+
+  * `POST /api/webhooks/collab-pay`
+  * HMAC verify using `COLLAB_PAY_WEBHOOK_SECRET` over the **raw body**
+  * Idempotency: upsert into `webhook_receipts` by `event.id`
+  * Writes `payments_ledger` and, if `metadata.ref_code` exists, inserts into `referrals_events` (event_type=`purchase`, amount, customer_id, meta)
+* `patches/0001-server-index-collab-webhook.patch`
+
+  * Captures raw body via `express.json({ verify })`
+  * Mounts the webhook router
+* `sql/collab_webhooks.sql`
+
+  * `webhook_receipts`, `payments_ledger` tables
+* `client/src/lib/referral.js`
+
+  * `getReferralCode()` reads `sn_ref` cookie
+  * `withReferralMetadata(meta)` appends `ref_code` to your checkout payload
+
+# Install
+
+```bash
+# 1) unzip over your repo
+unzip supernova-collab-webhook-bridge-20251020-0013.zip -d .
+
+# 2) DB schema
+psql (or Supabase SQL editor) < sql/collab_webhooks.sql
+
+# 3) Env
+# Add to server/.env and Helm secrets
+COLLAB_PAY_WEBHOOK_SECRET=your-shared-secret
+
+# 4) Restart server
+cd server && npm run dev
+```
+
+# Wire checkout to pass ref codes (client)
+
+Where you create a Collab Pay checkout payload:
+
+```js
+import { withReferralMetadata } from '../lib/referral'
+
+const payload = {
+  product: 'pro_plan',
+  amount_cents: 4900,
+  currency: 'USD',
+  metadata: withReferralMetadata({ customer_email: user.email })
+}
+await fetch('https://pay.<your-domain>/api/checkout', {
+  method: 'POST',
+  headers: {'content-type': 'application/json'},
+  body: JSON.stringify(payload)
+})
+```
+
+# Webhook expectations
+
+* Header: `x-collab-signature: sha256=<hex>`
+* Body JSON example:
+
+```json
+{
+  "id": "evt_123",
+  "type": "payment.succeeded",
+  "data": {
+    "customer_id": "cus_42",
+    "amount_cents": 4900,
+    "currency": "USD",
+    "product": "pro_plan",
+    "metadata": { "ref_code": "ABCD1234" }
+  }
+}
+```
+
+* On receipt:
+
+  * HMAC verified ⇒ 200 immediately
+  * `payments_ledger` upserted
+  * If `ref_code` present ⇒ `referrals_events` insert (`purchase`, amount_usd=49)
+
+# Helm values (prod)
+
+```yaml
+secrets:
+  COLLAB_PAY_WEBHOOK_SECRET: "<shared-secret>"
+env:
+  # keep your existing values...
+```
+
+Want me to also add **signature timestamp tolerance** (replay protection) and a **retry DLQ** table? Say **“harden webhooks”** and I’ll ship that as a patch.

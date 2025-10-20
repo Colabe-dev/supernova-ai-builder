@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Copy, Download, CheckCircle } from 'lucide-react';
+import { Loader2, Copy, Download, CheckCircle, AlertCircle } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { Link } from 'wouter';
 
 interface ReferralStats {
   affiliate_id: string;
@@ -19,14 +20,27 @@ interface ReferralStats {
   total_revenue_usd: number;
 }
 
+interface HealthCheckResponse {
+  ok: boolean;
+  error?: string;
+}
+
 export default function Referrals() {
   const [email, setEmail] = useState('');
   const [generatedLink, setGeneratedLink] = useState('');
   const { toast } = useToast();
 
+  const healthQuery = useQuery<HealthCheckResponse>({
+    queryKey: ['/api/db/health'],
+    refetchInterval: 10000, // Check every 10s
+  });
+
+  const isSupabaseConfigured = healthQuery.data?.ok ?? false;
+
   const statsQuery = useQuery<ReferralStats[]>({
     queryKey: ['/api/referrals/stats'],
     refetchInterval: 30000, // Refresh every 30s
+    enabled: isSupabaseConfigured, // Only fetch if Supabase is configured
   });
 
   const createAffiliateMutation = useMutation({
@@ -77,6 +91,19 @@ export default function Referrals() {
         <p className="text-muted-foreground">Generate referral links and track your performance</p>
       </div>
 
+      {!isSupabaseConfigured && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Supabase is not configured. Please{' '}
+            <Link href="/supabase" className="underline font-semibold">
+              configure Supabase
+            </Link>{' '}
+            to use the referral system.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card className="mb-6">
         <CardHeader>
           <CardTitle>Generate Your Referral Link</CardTitle>
@@ -100,12 +127,17 @@ export default function Referrals() {
             </div>
             <Button
               type="submit"
-              disabled={createAffiliateMutation.isPending}
+              disabled={createAffiliateMutation.isPending || !isSupabaseConfigured}
               data-testid="button-generate-link"
             >
               {createAffiliateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Generate Link
             </Button>
+            {!isSupabaseConfigured && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Configure Supabase to generate referral links
+              </p>
+            )}
           </form>
 
           {generatedLink && (

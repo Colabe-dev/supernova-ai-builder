@@ -21,6 +21,8 @@ The backend, built with Express, handles core API endpoints for projects, templa
 
 **Supabase Integration**: One-click Supabase auto-integration with two modes: (A) Connect to existing project via URL and API keys, or (B) Auto-provision new project via Supabase Management API. The system includes pre-configured clients for web (`client/src/lib/supabase.ts`) and server (`server/integrations/supabase.ts`), automated database bootstrap with RLS-safe tables (profiles, system_health), health check monitoring at `/api/db/health`, and proper credential segregation (service role server-only, anon key for client). API routes handle connection (`/api/supabase/connect`), provisioning (`/api/supabase/provision`), and bootstrap (`/api/supabase/bootstrap`). Mobile support via Expo with deep linking configuration ready.
 
+**Referral System**: Neutral referral tracking system storing all data in Supabase. Features include affiliate link generation, 30-day cookie-based attribution, click tracking with IP/user agent logging, event recording for signups and purchases with revenue tracking, real-time statistics dashboard with auto-refresh, and CSV export for payout processing. The system uses secure cookies (`httpOnly`, `sameSite: 'lax'`, `secure` in production) and RFC 4180-compliant CSV escaping. RLS policies ensure service-role-only access to tracking tables. API routes: `/r/:code` (redirect + track), `/api/referrals/affiliate` (create link), `/api/referrals/event` (record conversion), `/api/referrals/stats` (dashboard data), `/api/referrals/export.csv` (payout file).
+
 The observability stack includes Pino for structured JSON logging with pino-http middleware and Sentry integration for error tracking. Security middleware (Helmet, CORS, rate limiting) provides defense-in-depth hardening. **Data persistence** uses Postgres for entitlements and in-memory storage for other application data.
 
 **Logging & Redaction Policy**: All request logging uses custom pino-http serializers that whitelist only safe headers and redact sensitive query parameters in development mode. In production, all query parameters are fully redacted. Authorization, Cookie, and other sensitive headers are never logged.
@@ -37,6 +39,7 @@ A real-time AI-assisted development system operates via WebSocket at `/api/chat/
 - **Project Management**: Create and manage projects from predefined templates (e.g., Next.js 14, Expo SDK 51).
 - **AI Chat Builder**: Real-time collaborative development with a WebSocket-powered swarm orchestrator.
 - **Supabase Integration**: One-click auto-integration with existing or new Supabase projects. Interactive setup wizard with health monitoring, automatic database bootstrap with RLS policies, and proper credential management for web/server/mobile.
+- **Referral Tracking**: Neutral affiliate system with link generation, cookie attribution, event tracking (signups, purchases), revenue reporting, and CSV export. No external SaaS dependencies.
 - **Dev Console**: Integrated development environment with a file tree, code editor, live preview, and terminal access.
 - **Design Mode**: Real-time customization of design tokens with live visual feedback.
 - **Brand System**: Runtime application of design tokens with live Server-Sent Events (SSE) updates.
@@ -64,3 +67,4 @@ A real-time AI-assisted development system operates via WebSocket at `/api/chat/
 - **Apple StoreKit 2 JWS**: For IAP verification.
 - **ws**: WebSocket library.
 - **diff**: Unified diff generation.
+- **cookie-parser**: Cookie parsing middleware for referral attribution.
