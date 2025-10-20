@@ -4,6 +4,16 @@
   grid-template-columns: 38% 8px 1fr;
   overflow: hidden;
 }
+
+.workbench-with-rooms {
+  display: flex;
+  flex-direction: row;
+}
+
+.rooms-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+}
 .workbench .pane {
   height: 100%;
   overflow: hidden;

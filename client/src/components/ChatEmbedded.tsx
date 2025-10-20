@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
 
 const WS_PATH = import.meta?.env?.VITE_WS_PATH || '/api/chat/ws';
 
@@ -17,7 +19,11 @@ interface Message {
   path?: string;
 }
 
-export default function ChatEmbedded() {
+interface ChatEmbeddedProps {
+  roomId: string | null;
+}
+
+export default function ChatEmbedded({ roomId }: ChatEmbeddedProps) {
   const [log, setLog] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [autonomy, setAutonomy] = useState(false);
@@ -26,6 +32,47 @@ export default function ChatEmbedded() {
   const wsRef = useRef<WebSocket | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
+  // Load room messages when roomId changes
+  const { data: messagesData } = useQuery({
+    queryKey: ['/api/rooms', roomId, 'messages'],
+    enabled: !!roomId,
+  });
+
+  // Load messages from room when data arrives
+  useEffect(() => {
+    if (messagesData?.messages) {
+      const loadedMessages = messagesData.messages.map((m: any) => ({
+        type: m.role === 'user' ? 'user' : m.type,
+        text: m.text,
+        ...((m.payload || {}) as any),
+      }));
+      setLog(loadedMessages);
+    } else if (!roomId) {
+      setLog([]);
+    }
+  }, [messagesData, roomId]);
+
+  // Persist message to room
+  const persistMessage = async (message: Message) => {
+    if (!roomId) return;
+    
+    try {
+      await apiRequest('POST', `/api/rooms/${roomId}/messages`, {
+        role: message.type === 'user' ? 'user' : 'assistant',
+        type: message.type,
+        text: message.text || '',
+        payload: {
+          stdout: message.stdout,
+          stderr: message.stderr,
+          diff: message.diff,
+          path: message.path,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to persist message:', error);
+    }
+  };
+
   useEffect(() => {
     const ws = new WebSocket(wsUrl());
     wsRef.current = ws;
@@ -33,14 +80,21 @@ export default function ChatEmbedded() {
       try {
         const m = JSON.parse(e.data);
         setLog(prev => prev.concat(m));
+        persistMessage(m);
       } catch (error) {
         console.error('Failed to parse message:', error);
       }
     });
-    ws.addEventListener('open', () => setLog(prev => prev.concat({ type: 'status', text: 'Connected' })));
-    ws.addEventListener('close', () => setLog(prev => prev.concat({ type: 'status', text: 'Disconnected' })));
+    ws.addEventListener('open', () => {
+      const statusMsg = { type: 'status', text: 'Connected' };
+      setLog(prev => prev.concat(statusMsg));
+    });
+    ws.addEventListener('close', () => {
+      const statusMsg = { type: 'status', text: 'Disconnected' };
+      setLog(prev => prev.concat(statusMsg));
+    });
     return () => ws.close();
-  }, []);
+  }, [roomId]);
 
   useEffect(() => {
     if (!logRef.current) return;
@@ -49,13 +103,17 @@ export default function ChatEmbedded() {
 
   const send = () => {
     if (!text.trim()) return;
+    const userMessage = { type: 'user', text };
     const payload = { type: 'user', text, autonomy, llm, model };
+    
     try {
       wsRef.current?.send(JSON.stringify(payload));
     } catch (error) {
       console.error('Failed to send message:', error);
     }
-    setLog(prev => prev.concat({ type: 'user', text }));
+    
+    setLog(prev => prev.concat(userMessage));
+    persistMessage(userMessage);
     setText('');
   };
 
@@ -64,6 +122,16 @@ export default function ChatEmbedded() {
       send();
     }
   };
+
+  if (!roomId) {
+    return (
+      <div className="chat-embed">
+        <div className="log" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: 0.5 }}>
+          Select or create a room to start chatting
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="chat-embed">
