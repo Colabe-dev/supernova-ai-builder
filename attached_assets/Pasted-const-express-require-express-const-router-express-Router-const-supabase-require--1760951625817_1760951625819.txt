@@ -1,0 +1,214 @@
+const express = require('express');
+const router = express.Router();
+const { supabase } = require('../lib/supabase');
+
+// Get or initialize LPM for a room
+router.get('/:room_id/lpm', async (req, res) => {
+  try {
+    const { room_id } = req.params;
+    
+    let { data: lpm, error } = await supabase
+      .from('living_project_models')
+      .select('*')
+      .eq('room_id', room_id)
+      .single();
+
+    if (error && error.code === 'PGRST116') {
+      // Create initial LPM
+      const initialLPM = {
+        tech_stack: ['react', 'node', 'supabase'],
+        data_models: {},
+        user_flows: {},
+        business_rules: {},
+        ui_components: {},
+        architecture: {}
+      };
+
+      const { data: newLPM, error: createError } = await supabase
+        .from('living_project_models')
+        .insert([{ room_id, project_model: initialLPM }])
+        .select()
+        .single();
+
+      return res.json({ lpm: newLPM });
+    }
+
+    if (error) throw error;
+    res.json({ lpm });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update LPM
+router.put('/:room_id/lpm', async (req, res) => {
+  try {
+    const { room_id } = req.params;
+    const { project_model } = req.body;
+
+    const { data, error } = await supabase
+      .from('living_project_models')
+      .update({ 
+        project_model,
+        updated_at: new Date().toISOString(),
+        version: supabase.rpc('increment', { x: 1 })
+      })
+      .eq('room_id', room_id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json({ lpm: data });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Analyze feature impact
+router.post('/:room_id/analyze-feature', async (req, res) => {
+  try {
+    const { room_id } = req.params;
+    const { feature_description } = req.body;
+
+    // Get current LPM
+    const { data: lpm, error: lpmError } = await supabase
+      .from('living_project_models')
+      .select('project_model')
+      .eq('room_id', room_id)
+      .single();
+
+    if (lpmError) throw lpmError;
+
+    // Simple impact analysis based on current project model
+    const impact = analyzeFeatureImpact(feature_description, lpm.project_model);
+    
+    // Log this decision
+    await supabase
+      .from('project_decisions')
+      .insert([{
+        room_id,
+        decision_type: 'feature_analysis',
+        description: `Analyzed feature: ${feature_description}`,
+        rationale: impact.summary,
+        impact_analysis: impact
+      }]);
+
+    res.json({ impact });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get consistency report
+router.get('/:room_id/consistency-report', async (req, res) => {
+  try {
+    const { room_id } = req.params;
+    
+    // In a real implementation, you'd analyze current files against LPM
+    const report = {
+      score: 85,
+      issues: [
+        { type: 'design_tokens', message: '3 components not using design tokens', severity: 'medium' },
+        { type: 'error_handling', message: 'New API route missing error handling', severity: 'low' }
+      ],
+      suggestions: [
+        'Standardize button components',
+        'Add input validation to user registration'
+      ]
+    };
+
+    res.json({ report });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Architecture advice command
+router.post('/:room_id/advise', async (req, res) => {
+  try {
+    const { room_id } = req.params;
+    const { feature, context } = req.body;
+
+    const advice = generateArchitectureAdvice(feature, context);
+    
+    res.json({ advice });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Helper functions
+function analyzeFeatureImpact(feature, projectModel) {
+  // Simple rule-based impact analysis
+  const impacts = [];
+  
+  if (feature.toLowerCase().includes('user') || feature.toLowerCase().includes('auth')) {
+    impacts.push('Will affect user data model and authentication flow');
+  }
+  
+  if (feature.toLowerCase().includes('payment') || feature.toLowerCase().includes('subscription')) {
+    impacts.push('Requires payment service integration and secure endpoints');
+  }
+  
+  if (feature.toLowerCase().includes('real-time') || feature.toLowerCase().includes('chat')) {
+    impacts.push('Needs WebSocket integration and real-time data handling');
+  }
+
+  return {
+    summary: `This feature affects ${impacts.length} major areas`,
+    components_affected: impacts.length * 2, // Estimate
+    data_changes: impacts.length,
+    api_endpoints: Math.ceil(impacts.length / 2),
+    considerations: impacts
+  };
+}
+
+function generateArchitectureAdvice(feature, context) {
+  const adviceTemplates = {
+    'authentication': {
+      stack: 'Supabase Auth + JWT',
+      steps: [
+        'Create users table with profiles',
+        'Implement auth middleware for API routes',
+        'Add protected route components',
+        'Set up email templates for auth flows'
+      ],
+      estimated_complexity: 'Medium (2-3 days)'
+    },
+    'crud': {
+      stack: 'React + Express + Supabase',
+      steps: [
+        'Define data model in Supabase',
+        'Create API endpoints (GET, POST, PUT, DELETE)',
+        'Build React components with state management',
+        'Add error handling and loading states'
+      ],
+      estimated_complexity: 'Low (1-2 days)'
+    },
+    'real-time': {
+      stack: 'WebSockets + Supabase Realtime',
+      steps: [
+        'Set up WebSocket server integration',
+        'Create real-time subscription hooks',
+        'Implement optimistic UI updates',
+        'Add connection state handling'
+      ],
+      estimated_complexity: 'High (3-5 days)'
+    }
+  };
+
+  // Simple pattern matching
+  for (const [pattern, template] of Object.entries(adviceTemplates)) {
+    if (feature.toLowerCase().includes(pattern)) {
+      return template;
+    }
+  }
+
+  return {
+    stack: 'React + Node + Supabase',
+    steps: ['Analyze requirements', 'Design data model', 'Implement backend', 'Build frontend'],
+    estimated_complexity: 'Unknown - needs more context'
+  };
+}
+
+module.exports = router;
