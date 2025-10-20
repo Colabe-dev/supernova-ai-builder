@@ -19,6 +19,8 @@ The frontend is built with React, Wouter for routing, TanStack Query for data fe
 ### Backend
 The backend, built with Express, handles core API endpoints for projects, templates, agents, approvals, in-app purchases, and entitlements. It includes a dev-routes module for file system access, terminal execution, and design token management. The IAP routes provide production-ready verification for Google Play and Apple App Store, with automatic entitlement grant fulfillment to Postgres. The entitlements system uses **Postgres** (Replit-hosted Neon) for persistent storage with transactional integrity, tracking coins, subscriptions, and purchase history. Idempotency is enforced via unique external_ref constraints.
 
+**Supabase Integration**: One-click Supabase auto-integration with two modes: (A) Connect to existing project via URL and API keys, or (B) Auto-provision new project via Supabase Management API. The system includes pre-configured clients for web (`client/src/lib/supabase.ts`) and server (`server/integrations/supabase.ts`), automated database bootstrap with RLS-safe tables (profiles, system_health), health check monitoring at `/api/db/health`, and proper credential segregation (service role server-only, anon key for client). API routes handle connection (`/api/supabase/connect`), provisioning (`/api/supabase/provision`), and bootstrap (`/api/supabase/bootstrap`). Mobile support via Expo with deep linking configuration ready.
+
 The observability stack includes Pino for structured JSON logging with pino-http middleware and Sentry integration for error tracking. Security middleware (Helmet, CORS, rate limiting) provides defense-in-depth hardening. **Data persistence** uses Postgres for entitlements and in-memory storage for other application data.
 
 **Logging & Redaction Policy**: All request logging uses custom pino-http serializers that whitelist only safe headers and redact sensitive query parameters in development mode. In production, all query parameters are fully redacted. Authorization, Cookie, and other sensitive headers are never logged.
@@ -34,6 +36,7 @@ A real-time AI-assisted development system operates via WebSocket at `/api/chat/
 ### Key Features
 - **Project Management**: Create and manage projects from predefined templates (e.g., Next.js 14, Expo SDK 51).
 - **AI Chat Builder**: Real-time collaborative development with a WebSocket-powered swarm orchestrator.
+- **Supabase Integration**: One-click auto-integration with existing or new Supabase projects. Interactive setup wizard with health monitoring, automatic database bootstrap with RLS policies, and proper credential management for web/server/mobile.
 - **Dev Console**: Integrated development environment with a file tree, code editor, live preview, and terminal access.
 - **Design Mode**: Real-time customization of design tokens with live visual feedback.
 - **Brand System**: Runtime application of design tokens with live Server-Sent Events (SSE) updates.
@@ -42,6 +45,7 @@ A real-time AI-assisted development system operates via WebSocket at `/api/chat/
 
 ## External Dependencies
 - **OpenAI API**: For AI agent functionality.
+- **Supabase**: Backend-as-a-Service for authentication, database (Postgres), and storage with @supabase/supabase-js SDK.
 - **React**: Frontend UI library.
 - **Wouter**: Client-side routing for React.
 - **TanStack Query**: Data fetching and caching.

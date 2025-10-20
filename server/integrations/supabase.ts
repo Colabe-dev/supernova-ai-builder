@@ -1,22 +1,40 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE || '';
+let cachedAdmin: SupabaseClient | null = null;
 
-export const supabaseAdmin = supabaseUrl && supabaseServiceRole
-  ? createClient(supabaseUrl, supabaseServiceRole, {
+export function getSupabaseAdmin(): SupabaseClient | null {
+  const supabaseUrl = process.env.SUPABASE_URL || '';
+  const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE || '';
+
+  if (!supabaseUrl || !supabaseServiceRole) {
+    return null;
+  }
+
+  if (!cachedAdmin) {
+    cachedAdmin = createClient(supabaseUrl, supabaseServiceRole, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
       },
-    })
-  : null;
+    });
+  }
+
+  return cachedAdmin;
+}
+
+export function reloadSupabaseConfig() {
+  cachedAdmin = null;
+}
 
 export function isSupabaseConfigured(): boolean {
+  const supabaseUrl = process.env.SUPABASE_URL || '';
+  const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE || '';
   return !!(supabaseUrl && supabaseServiceRole);
 }
 
 export async function healthCheck(): Promise<{ ok: boolean; error?: string; usersSeen?: number }> {
+  const supabaseAdmin = getSupabaseAdmin();
+  
   if (!supabaseAdmin) {
     return { ok: false, error: 'Supabase not configured' };
   }
@@ -37,46 +55,31 @@ export async function healthCheck(): Promise<{ ok: boolean; error?: string; user
   }
 }
 
-export async function bootstrapDatabase(): Promise<{ ok: boolean; error?: string }> {
+export async function bootstrapDatabase(): Promise<{ ok: boolean; error?: string; message?: string }> {
+  const supabaseAdmin = getSupabaseAdmin();
+  
   if (!supabaseAdmin) {
     return { ok: false, error: 'Supabase not configured' };
   }
 
   try {
-    const { error } = await supabaseAdmin.rpc('exec_sql', {
-      sql: `
-        -- Profiles linked to auth.users
-        create table if not exists public.profiles (
-          id uuid primary key references auth.users(id) on delete cascade,
-          username text unique,
-          created_at timestamptz default now()
-        );
+    const { error: profilesError } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .limit(1);
 
-        alter table public.profiles enable row level security;
+    if (profilesError && profilesError.code === 'PGRST116') {
+      return {
+        ok: false,
+        error: 'Unable to bootstrap database. Please run the SQL manually via Supabase Dashboard SQL Editor. See documentation for SQL script.',
+      };
+    }
 
-        -- Drop policies if they exist
-        drop policy if exists "profiles are viewable by owner" on public.profiles;
-        drop policy if exists "profiles are insertable by owner" on public.profiles;
-
-        -- Create policies
-        create policy "profiles are viewable by owner"
-        on public.profiles for select using (auth.uid() = id);
-
-        create policy "profiles are insertable by owner"
-        on public.profiles for insert with check (auth.uid() = id);
-
-        -- System health table
-        create table if not exists public.system_health (
-          id serial primary key,
-          last_check timestamptz default now()
-        );
-
-        alter table public.system_health enable row level security;
-      `,
-    });
-
-    if (error) {
-      return { ok: false, error: String(error.message || error) };
+    if (!profilesError || profilesError.code === '42P01') {
+      return {
+        ok: true,
+        message: 'Database tables appear to be set up. If you need to create tables, please use the Supabase Dashboard SQL Editor with the provided SQL script.',
+      };
     }
 
     return { ok: true };

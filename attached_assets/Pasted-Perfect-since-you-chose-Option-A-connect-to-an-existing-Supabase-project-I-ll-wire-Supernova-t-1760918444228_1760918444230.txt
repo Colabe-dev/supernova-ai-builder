@@ -1,0 +1,327 @@
+Perfect—since you chose **Option A (connect to an existing Supabase project)** I’ll wire Supernova to Supabase with a **one-click local wizard** and safe env handling. You’ll get: client + server SDKs, a `/settings/supabase` page that writes the envs for you (dev-only), a server health probe, and RLS-safe starter SQL.
+
+Below are **precise patches**. Copy/paste as-is.
+
+---
+
+# 0) Install deps
+
+**Server**
+
+```bash
+cd server
+npm i @supabase/supabase-js
+```
+
+**Client**
+
+```bash
+cd ../client
+npm i @supabase/supabase-js
+```
+
+---
+
+# 1) Allow writing `.env` files during dev (so the wizard can save keys)
+
+**Edit** `server/src/dev/paths.js` — extend the allowlist to include the whole `client` folder (not just `client/src`):
+
+```diff
+- const ALLOWED = [
+-   'client/src',
+-   'server',
+-   'shared',
+-   'public'
+- ].map(p => path.join(ROOT, p));
++ const ALLOWED = [
++   'client',     // <— allows saving client/.env from the wizard
++   'client/src',
++   'server',
++   'shared',
++   'public'
++ ].map(p => path.join(ROOT, p));
+```
+
+> Dev-only routes are disabled in production; this is safe.
+
+---
+
+# 2) Client SDK + tiny test
+
+**Add** `client/src/lib/supabase.js`
+
+```js
+import { createClient } from '@supabase/supabase-js'
+
+const url  = import.meta.env.VITE_SUPABASE_URL
+const anon = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+export const supabase = createClient(url, anon)
+```
+
+**Add** quick test page: `client/src/pages/SupabaseCheck.jsx`
+
+```jsx
+import React, { useState } from 'react'
+import { supabase } from '../lib/supabase'
+
+export default function SupabaseCheck(){
+  const [out, setOut] = useState('')
+
+  const ping = async () => {
+    try {
+      // public query with anon key (no auth required)
+      const { data, error } = await supabase.from('profiles').select('id').limit(1)
+      if (error) throw error
+      setOut('Client OK: profiles rows seen = ' + (data?.length ?? 0))
+    } catch (e) {
+      setOut('Client ERROR: ' + (e.message || String(e)))
+    }
+  }
+
+  return (
+    <>
+      <header>
+        <a href="/">Home</a>
+        <a href="/dev">Dev Console</a>
+        <a href="/diff">Diffs</a>
+        <a href="/settings/supabase">Supabase</a>
+      </header>
+      <div style={{padding:16}}>
+        <h2>Supabase Client Check</h2>
+        <button className="btn" onClick={ping}>Test client query</button>
+        <pre style={{marginTop:12}}>{out}</pre>
+      </div>
+    </>
+  )
+}
+```
+
+**Wire route** in `client/src/main.jsx`
+
+```diff
+ import App from './pages/App.jsx'
+ import Dev from './pages/Dev.jsx'
+ import Diff from './pages/Diff.jsx'
++import SupabaseCheck from './pages/SupabaseCheck.jsx'
+
+ const router = createBrowserRouter([
+   { path: '/', element: <App/> },
+   { path: '/dev', element: <Dev/> },
+   { path: '/diff', element: <Diff/> },
++  { path: '/settings/supabase', element: <SupabaseCheck/> },
+ ])
+```
+
+---
+
+# 3) Server admin client + health probe
+
+**Add** `server/src/integrations/supabase.js`
+
+```js
+import { createClient } from '@supabase/supabase-js'
+
+const url = process.env.SUPABASE_URL
+const service = process.env.SUPABASE_SERVICE_ROLE
+
+export const supabaseAdmin = (url && service)
+  ? createClient(url, service, { auth: { autoRefreshToken: false, persistSession: false } })
+  : null
+```
+
+**Add** `server/src/routes/db.health.js`
+
+```js
+import { Router } from 'express'
+import { supabaseAdmin } from '../integrations/supabase.js'
+
+const r = Router()
+r.get('/api/db/health', async (_req, res) => {
+  if (!supabaseAdmin) return res.status(503).json({ ok: false, error: 'SUPABASE_URL or SERVICE_ROLE missing' })
+  try {
+    // Lightweight admin call
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1 })
+    if (error) throw error
+    return res.json({ ok: true, usersSeen: data?.users?.length ?? 0 })
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message || String(e) })
+  }
+})
+export default r
+```
+
+**Mount the route** in `server/index.js`
+
+```diff
+ import tokensRouter, { getTokens } from './src/design/tokens.js';
++import dbHealth from './src/routes/db.health.js';
+
+ // Health
+ app.get('/healthz', (req, res) => res.json({ ok: true, ts: Date.now() }));
+
++// DB health
++app.use(dbHealth);
+```
+
+---
+
+# 4) Dev wizard to save keys (writes `.env` files for you)
+
+**Add** `client/src/pages/SupabaseSettings.jsx`
+
+```jsx
+import React, { useState } from 'react'
+
+export default function SupabaseSettings(){
+  const [url, setUrl] = useState('')
+  const [anon, setAnon] = useState('')
+  const [service, setService] = useState('')
+  const [status, setStatus] = useState('')
+
+  const writeFile = async (path, content) => {
+    const res = await fetch('/api/dev/fs/write',{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body: JSON.stringify({ path, content })
+    })
+    const j = await res.json()
+    if(!j.ok) throw new Error(j.error || 'write failed')
+  }
+
+  const save = async () => {
+    try {
+      // 1) client/.env
+      const clientEnv = `VITE_SUPABASE_URL=${url}\nVITE_SUPABASE_ANON_KEY=${anon}\n`
+      await writeFile('client/.env', clientEnv)
+
+      // 2) server/.env (server-only secret)
+      const serverEnv = `SUPABASE_URL=${url}\nSUPABASE_SERVICE_ROLE=${service}\n`
+      await writeFile('server/.env', serverEnv)
+
+      setStatus('Saved. Restart Vite if running, then build/test.')
+    } catch (e) {
+      setStatus('ERROR: ' + e.message)
+    }
+  }
+
+  const check = async () => {
+    const res = await fetch('/api/db/health')
+    const j = await res.json()
+    setStatus('Server health: ' + JSON.stringify(j))
+  }
+
+  return (
+    <>
+      <header>
+        <a href="/">Home</a>
+        <a href="/dev">Dev Console</a>
+        <a href="/diff">Diffs</a>
+        <a href="/settings/supabase">Supabase</a>
+      </header>
+      <div style={{padding:16, maxWidth:640}}>
+        <h2>Supabase — Connect Existing Project</h2>
+        <label>Project URL</label>
+        <input className="input" placeholder="https://xxxx.supabase.co" value={url} onChange={e=>setUrl(e.target.value)} />
+        <label>Anon key (client)</label>
+        <input className="input" value={anon} onChange={e=>setAnon(e.target.value)} />
+        <label>Service role key (server-only)</label>
+        <input className="input" value={service} onChange={e=>setService(e.target.value)} />
+        <div className="row" style={{marginTop:12}}>
+          <button className="btn" onClick={save}>Save</button>
+          <button className="btn" onClick={check}>Server DB Health</button>
+        </div>
+        <pre style={{marginTop:12}}>{status}</pre>
+      </div>
+    </>
+  )
+}
+```
+
+**Wire it** in `client/src/main.jsx`
+
+```diff
+-import SupabaseCheck from './pages/SupabaseCheck.jsx'
++import SupabaseCheck from './pages/SupabaseCheck.jsx'
++import SupabaseSettings from './pages/SupabaseSettings.jsx'
+ ...
+   { path: '/settings/supabase', element: <SupabaseCheck/> },
++  { path: '/settings/supabase/setup', element: <SupabaseSettings/> },
+```
+
+Now you can go to `/settings/supabase/setup`, paste keys, click **Save**, then **Server DB Health**.
+
+---
+
+# 5) RLS-safe starter SQL (optional but recommended)
+
+Paste this in the **Supabase SQL Editor** (or run via CLI) to create the basic table used by the client check:
+
+```sql
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  username text unique,
+  created_at timestamptz default now()
+);
+
+alter table public.profiles enable row level security;
+
+create policy "profiles are viewable by owner"
+on public.profiles for select using (auth.uid() = id);
+
+create policy "profiles are insertable by owner"
+on public.profiles for insert with check (auth.uid() = id);
+```
+
+---
+
+# 6) Local run & validation
+
+```bash
+# server (reload picks up server/.env)
+cd server && npm run dev
+
+# client (restart vite to load client/.env)
+cd ../client && npm run dev
+
+# browser
+http://localhost:5173/settings/supabase/setup    # paste & save keys
+http://localhost:5173/settings/supabase          # run client query test
+http://localhost:3001/api/db/health              # server admin sanity
+```
+
+Expected:
+
+* **Client check** returns “Client OK…”
+* **Server health** returns `{ ok: true, usersSeen: ... }`
+
+---
+
+# 7) Production wiring (Helm values)
+
+Add these to your `values-*.yaml` (CI can inject client VITE vars at build time; server secrets remain in K8s):
+
+```yaml
+env:
+  VITE_SUPABASE_URL: "https://xxxx.supabase.co"        # used at client build time
+  # VITE_SUPABASE_ANON_KEY should be injected in the client build job (not stored in the chart)
+
+secrets:
+  SUPABASE_URL: "https://xxxx.supabase.co"
+  SUPABASE_SERVICE_ROLE: "<service-role-key>"
+```
+
+*CI build step* (example): pass `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` into the Docker build that runs `client build`, so the compiled assets have the right env baked in. Server never sees the anon key at runtime.
+
+---
+
+## That’s it
+
+You’ve got a **true automatic Supabase connect** for existing projects:
+
+* A setup wizard that writes envs (dev-only),
+* Client + server SDKs,
+* Health checks,
+* RLS-safe base schema.
+
+If you want me to **bundle these patches into a ZIP** that overlays your current repo, say **“ship supabase patch”** and I’ll deliver the files ready to drop in.
