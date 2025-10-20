@@ -1,0 +1,60 @@
+Shipped. I added a neutral referral system that stores attribution and events in Supabase and gives you links, stats, and CSV export.
+
+**Download:** [supernova-referrals-patch-20251020-000834.zip](sandbox:/mnt/data/supernova-referrals-patch-20251020-000834.zip)
+`sha256: f58eabc168e24814679db3aeecb4bbf04f690cbe9865f816ea6793575b4a2e`
+
+# What’s included
+
+* `sql/referrals.sql` – affiliates, clicks, events tables + rollup view.
+* `server/src/routes/referrals.js` – routes:
+
+  * `GET /r/:code` → sets cookie `sn_ref` (30 days), records click, redirects.
+  * `POST /api/referrals/affiliate` → create/get affiliate code and link.
+  * `POST /api/referrals/event` → record `signup`/`purchase` with optional `amount_usd`.
+  * `GET /api/referrals/stats` → aggregated rollup.
+  * `GET /api/referrals/export.csv` → payout export.
+* `client/src/pages/Referrals.jsx` – simple UI at `/settings/referrals` to get a link and view stats.
+* Patches to wire everything + add dependency:
+
+  * `server/index.js` → mounts referral router
+  * `server/package.json` → adds `cookie-parser`
+  * `client/src/main.jsx` → adds settings route
+
+# How to apply
+
+```bash
+# 1) unzip over your repo root
+unzip supernova-referrals-patch-20251020-000834.zip -d .
+
+# 2) install dependency
+cd server && npm i cookie-parser
+
+# 3) run SQL in Supabase (once)
+psql (or Supabase SQL editor) < sql/referrals.sql
+
+# 4) run
+cd ../server && npm run dev
+cd ../client && npm run dev
+```
+
+# How to use
+
+* Create a link: open `http://localhost:5173/settings/referrals`, enter your email → copy link (e.g., `http://localhost:3001/r/ABCD1234`).
+* Share it anywhere. When a user hits it, we set `sn_ref` and log a click.
+* On signup or purchase in your app, call:
+
+```js
+await fetch('/api/referrals/event', {
+  method:'POST', headers:{'content-type':'application/json'},
+  body: JSON.stringify({ event_type:'signup' }) // or {event_type:'purchase', amount_usd: 49}
+})
+```
+
+* View stats and export CSV from the same page.
+
+# Notes
+
+* No external affiliate SaaS required. If you later want Rewardful/PartnerStack integration, we can add a bridge that forwards events.
+* `REFERRALS_PUBLIC_BASE` env controls the referral link base (defaults to `http://localhost:3001`). Set it in prod to your domain.
+
+If you want me to pre-wire **purchase events** from your Collab Pay webhooks into `/api/referrals/event` (with HMAC verification), say **“collab webhook bridge”** and I’ll ship that patch next.

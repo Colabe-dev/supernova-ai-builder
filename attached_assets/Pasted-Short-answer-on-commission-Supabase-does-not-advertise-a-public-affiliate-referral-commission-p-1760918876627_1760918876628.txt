@@ -1,0 +1,75 @@
+Short answer on commission: **Supabase does not advertise a public affiliate / referral commission program.** They have a **Partner/Marketplace** program (integration & co-marketing) and an **advocate (SupaSquad)** community track, but there’s no public “get paid per customer you refer” scheme documented. If you want revenue share, it typically means **direct BD with Supabase** or offering your own affiliate for Supernova and integrating with their OAuth/Marketplace for distribution. ([Supabase][1])
+
+That said, we can still monetize referrals **on our side** (e.g., Rewardful/PartnerStack/Tapfiliate) and track which projects connected to Supabase via Supernova, then do co-marketing with Supabase. If you want, I’ll wire a neutral **referral-tracking module** into the builder.
+
+---
+
+# Shipped: Supabase Patch (Option A — connect existing project)
+
+**Download:** [supernova-supabase-patch-20251020-000358.zip](sandbox:/mnt/data/supernova-supabase-patch-20251020-000358.zip)
+`sha256: ccfdce298da7d6137c0581cef9025f9f02c5cfca5c14362f8be33ee969e03d`
+
+What’s inside:
+
+* New files:
+
+  * `client/src/lib/supabase.js`
+  * `client/src/pages/SupabaseCheck.jsx`
+  * `client/src/pages/SupabaseSettings.jsx`
+  * `server/src/integrations/supabase.js`
+  * `server/src/routes/db.health.js`
+  * `sql/supabase_bootstrap.sql`
+* Diffs you can apply with `git apply patches/*.patch`:
+
+  * Add DB health route to `server/index.js`
+  * Extend dev FS allowlist to include `client` (so the wizard can write `.env`)
+  * Add settings routes in `client/src/main.jsx`
+  * Add `@supabase/supabase-js` to both package.json files
+* `README.md` with exact steps
+
+## Install (super quick)
+
+```bash
+# 1) unzip over your repo root
+# 2) deps
+cd server && npm i @supabase/supabase-js
+cd ../client && npm i @supabase/supabase-js
+
+# 3) run
+cd ../server && npm run dev
+cd ../client && npm run dev
+```
+
+Then:
+
+* Go to `http://localhost:5173/settings/supabase/setup`
+* Paste `Project URL`, `Anon key`, `Service Role key` → **Save** → **Server DB Health**
+* Optional: in Supabase, run `sql/supabase_bootstrap.sql`, then visit `/settings/supabase` and click **Test client query**
+
+## Production wiring (Helm)
+
+Add to your env/secrets:
+
+```yaml
+env:
+  VITE_SUPABASE_URL: "https://xxxx.supabase.co"
+# inject VITE_SUPABASE_ANON_KEY at client build time
+
+secrets:
+  SUPABASE_URL: "https://xxxx.supabase.co"
+  SUPABASE_SERVICE_ROLE: "<service-role-key>"
+```
+
+---
+
+## If you want referral revenue anyway
+
+Two paths:
+
+1. **Run your own affiliate for Supernova** (reward users who connect Supabase via our connector). We can integrate **Rewardful** or **Tapfiliate** quickly and store events in Supabase for analytics. ([go.outseta.com][2])
+2. **Co-sell with Supabase** via their **Partners/Marketplace** listing; negotiate MDF or co-marketing benefits. Not the same as commissions, but it grows pipeline. ([Supabase][1])
+
+Say **“add referrals”** and I’ll ship a minimal module: link generator, cookie attribution, payout export CSV, and webhooks for your payment processor.
+
+[1]: https://supabase.com/partners "Partner with Supabase"
+[2]: https://go.outseta.com/support/kb/articles/pL9PyPWJ/integrate-rewardful-outseta-to-launch-an-affiliate-or-referral-program?utm_source=chatgpt.com "Integrate Rewardful & Outseta to launch an affiliate or ..."
