@@ -9,6 +9,7 @@ import iapRoutes from "./iap/routes.real.js";
 import entitlementsRoutes from "./entitlements/routes.db.js";
 import dbHealthRoutes from "./routes/db.health.js";
 import supabaseRoutes from "./routes/supabase.js";
+import referralsRoutes from "./routes/referrals.js";
 import { initChatWS } from "./chat/ws";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -23,6 +24,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Mount Supabase routes (Sprint 4 - Supabase Integration)
   app.use(dbHealthRoutes);
   app.use(supabaseRoutes);
+  // Mount Referrals routes (Sprint 4 - Referral Tracking)
+  app.use(referralsRoutes);
   app.get("/api/projects", async (req, res) => {
     try {
       const projects = await storage.getProjects();

@@ -19,6 +19,7 @@ import DevConsole from "@/pages/dev-console";
 import DiffPage from "@/pages/diff";
 import Chat from "@/pages/chat";
 import SupabaseSetup from "@/pages/supabase-setup";
+import Referrals from "@/pages/referrals";
 import NotFound from "@/pages/not-found";
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -102,6 +103,13 @@ function Router() {
         {() => (
           <DashboardLayout>
             <SupabaseSetup />
+          </DashboardLayout>
+        )}
+      </Route>
+      <Route path="/referrals">
+        {() => (
+          <DashboardLayout>
+            <Referrals />
           </DashboardLayout>
         )}
       </Route>

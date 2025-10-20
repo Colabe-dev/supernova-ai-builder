@@ -1,4 +1,4 @@
-import { Code2, Folder, FileCheck, Settings, Sparkles, Terminal, GitCompare, MessageSquare, Database } from "lucide-react";
+import { Code2, Folder, FileCheck, Settings, Sparkles, Terminal, GitCompare, MessageSquare, Database, Gift } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -48,6 +48,12 @@ const menuItems = [
     url: "/supabase",
     icon: Database,
     testId: "link-supabase",
+  },
+  {
+    title: "Referrals",
+    url: "/referrals",
+    icon: Gift,
+    testId: "link-referrals",
   },
   {
     title: "Approvals",
