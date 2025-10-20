@@ -1,0 +1,338 @@
+You’re right—we’re missing a bunch of “Altan-class” surface area. I audited your screenshots and mapped gaps → concrete work. Here’s the surgical plan.
+
+# Gap analysis (based on your screenshots)
+
+1. **Rooms / Multi-session chat**
+
+   * Altan: left sidebar with Rooms, “New Room”.
+   * Supernova: single /chat session.
+   * **Gap:** multi-room workspace, naming, persistence, share.
+
+2. **Agent creation flow**
+
+   * Altan: guided “Create an Agent” (type, goal, voice, name) with step statuses.
+   * Supernova: planner v2 in /chat only.
+   * **Gap:** opinions/UI to scaffold agents + saved configs (runtimes/tools).
+
+3. **Projects dashboard**
+
+   * Altan: hub with Projects, Agents, Flows, Rooms + Media, Integrations, Support, Usage, Team, Settings.
+   * Supernova: Dev Console, Diff, Settings (Supabase/Referrals).
+   * **Gap:** unified hub + entities (projects/flows/media/team).
+
+4. **Referrals credits**
+
+   * Altan: “Earn $250+ in free credits”, invite link, social post submission, automatic crediting.
+   * Supernova: referrals events + CSV; **no** credit ledger or incentives UI.
+   * **Gap:** credit currency, reward rules, redemption.
+
+5. **Profile & Workspace**
+
+   * Altan: profile page; workspace ID/name/logo.
+   * Supernova: none (auth only).
+   * **Gap:** /me, /workspace with branding + IDs.
+
+6. **API keys (per user/per workspace)**
+
+   * Altan: key list, create/rotate/delete.
+   * Supernova: none.
+   * **Gap:** keys table, hashed storage, quotas/permissions, UI.
+
+7. **Usage analytics**
+
+   * Altan: tokens, tasks, DB credits, charts, daily/weekly/monthly.
+   * Supernova: payment ledger only.
+   * **Gap:** usage_events pipeline, rollups, dashboards, alerts.
+
+8. **Integrations center**
+
+   * Altan: Integrations page.
+   * Supernova: partial “Collab Ecosystem” prep (needs finish).
+   * **Gap:** registry UI/SDK done end-to-end + OAuth/API base/key testers.
+
+9. **Support**
+
+   * Altan: Support in hub.
+   * Supernova: none.
+   * **Gap:** tickets/chat bridge to Collab Support.
+
+10. **Storage/RLS policies**
+
+* Screenshot shows Supabase **storage bucket policies** (photos/audio/video/exports).
+* **Gap:** provision buckets + RLS & helper UI.
+
+---
+
+# What we already shipped (leveraged by the plan)
+
+* Referrals + hardened webhooks + ledger ✅
+* LLM Planner v2 with explain/fix loop ✅
+* Global layout/raster + gradient titles ✅
+* Supabase connector & health ✅
+
+---
+
+# Priority build path (fastest path to parity)
+
+## Sprint A — Credits & Usage (foundation for monetization + referrals)
+
+**DB (Supabase)**
+
+* `credit_ledger(id, user_id, workspace_id, source, amount, meta, ts)`
+* `usage_events(id, user_id, workspace_id, kind, tokens_in, tokens_out, tasks, meta, ts)`
+* `usage_daily(workspace_id, day, tokens_in, tokens_out, tasks, credits_spent)` (materialized view or cron job)
+
+**API**
+
+* `POST /api/credits/grant` (admin) — map referral/social actions → credits
+* `GET /api/usage/summary?range=day|week|month`
+* `GET /api/usage/series?from=..&to=..&bucket=day`
+
+**UI**
+
+* `/usage` page (Daily/Weekly/Monthly, Area/Line/Bar like Altan)
+* `/referrals` enhancement: shows current credits, “how to earn” tasks, invite link
+
+**Why first:** unblocks growth loop + makes monetization real.
+
+---
+
+## Sprint B — API Keys & Workspace
+
+**DB**
+
+* `api_keys(id, workspace_id, name, hash, last4, scopes, created_at, revoked_at)`
+* `workspaces(id, name, logo_url, owner_id, created_at)`; `workspace_members(workspace_id, user_id, role)`
+
+**API/UI**
+
+* `/settings/workspace` (name/logo/ID)
+* `/settings/api-keys` (list, create, revoke; show last4 only)
+* Token format: `snk_live_...` (store **bcrypt/argon2 hash** only)
+
+**Why second:** dev-friendly; mirrors Altan’s Settings/API Keys.
+
+---
+
+## Sprint C — Rooms & Agents
+
+**DB**
+
+* `rooms(id, workspace_id, name, created_by, created_at)`
+* `agents(id, workspace_id, name, type, voice, goal, config_json, created_at)`
+
+**API/UI**
+
+* Sidebar “Rooms” with `+ New Room`
+* `/agents/new` guided flow (type→goal→voice→name) with step states (blue/green/gray)
+* Save `config_json` (tools, model, temperature); spawn session in /chat with that agent
+
+**Why third:** gets us the Altan feel; leverages Planner v2.
+
+---
+
+## Sprint D — Projects, Flows, Media, Support, Integrations
+
+* **Projects/Flows:** tables + cards on `/projects`
+* **Media:** Supabase storage buckets + RLS; simple library
+* **Support:** `/support` → Collab Support bridge (tickets API)
+* **Integrations:** finish Collab registry page with connect/test/actions (you asked for this)
+
+---
+
+# Minimal schemas & routes (ready to paste)
+
+### 1) Credits & Usage (SQL)
+
+```sql
+create table if not exists public.credit_ledger (
+  id bigserial primary key,
+  workspace_id uuid not null,
+  user_id uuid,
+  source text not null,               -- referral|social_post|purchase|bonus
+  amount integer not null,            -- positive or negative
+  meta jsonb,
+  ts timestamptz default now()
+);
+
+create table if not exists public.usage_events (
+  id bigserial primary key,
+  workspace_id uuid not null,
+  user_id uuid,
+  kind text not null,                 -- ai|task|db
+  tokens_in int default 0,
+  tokens_out int default 0,
+  tasks int default 0,
+  meta jsonb,
+  ts timestamptz default now()
+);
+
+-- Rollup view (or generate via cron)
+create materialized view if not exists public.usage_daily as
+select workspace_id,
+       date_trunc('day', ts) as day,
+       sum(tokens_in)  as tokens_in,
+       sum(tokens_out) as tokens_out,
+       sum(tasks)      as tasks
+from public.usage_events
+group by 1,2;
+```
+
+### 2) API (server stubs)
+
+```js
+// server/src/routes/credits.js
+import { Router } from 'express'
+import { supabaseAdmin as s } from '../integrations/supabase.js'
+const r = Router()
+
+r.post('/api/credits/grant', async (req,res) => {
+  const { workspace_id, user_id, source, amount, meta } = req.body||{}
+  if (!workspace_id || !source || !Number.isInteger(amount)) return res.status(400).json({ok:false,error:'missing'})
+  const { error } = await s.from('credit_ledger').insert({ workspace_id, user_id, source, amount, meta: meta||null })
+  if (error) return res.status(500).json({ok:false,error:error.message})
+  res.json({ok:true})
+})
+
+r.get('/api/usage/summary', async (req,res) => {
+  const { range='day', workspace_id } = req.query
+  if (!workspace_id) return res.status(400).json({ok:false,error:'workspace_id'})
+  const { data, error } = await s.rpc('usage_summary_fn', { p_workspace: workspace_id, p_range: range }).single().catch(()=>({}))
+  if (error) return res.status(500).json({ok:false,error:error.message})
+  res.json({ok:true, ...data})
+})
+
+r.get('/api/usage/series', async (req,res) => {
+  const { from, to, workspace_id } = req.query
+  const { data, error } = await s.from('usage_daily')
+    .select('*')
+    .eq('workspace_id', workspace_id)
+    .gte('day', from).lte('day', to)
+    .order('day', { ascending: true })
+  if (error) return res.status(500).json({ok:false,error:error.message})
+  res.json({ok:true, rows:data})
+})
+
+export default r
+```
+
+### 3) API Keys (SQL + server)
+
+```sql
+create table if not exists public.api_keys (
+  id bigserial primary key,
+  workspace_id uuid not null,
+  name text not null,
+  hash text not null,      -- store argon2/bcrypt hash, never raw
+  last4 text not null,
+  scopes text[] default '{}',
+  created_at timestamptz default now(),
+  revoked_at timestamptz
+);
+```
+
+```js
+// server/src/routes/apikeys.js
+import { Router } from 'express'
+import crypto from 'crypto'
+import { supabaseAdmin as s } from '../integrations/supabase.js'
+import bcrypt from 'bcryptjs'
+const r = Router()
+
+function genKey(){ return 'snk_live_' + crypto.randomBytes(24).toString('base64url') }
+
+r.post('/api/apikeys', async (req,res)=>{
+  const { workspace_id, name, scopes=[] } = req.body||{}
+  const raw = genKey()
+  const last4 = raw.slice(-4)
+  const hash = await bcrypt.hash(raw, 12)
+  const { data, error } = await s.from('api_keys').insert({ workspace_id, name, hash, last4, scopes }).select().maybeSingle()
+  if (error) return res.status(500).json({ok:false,error:error.message})
+  res.json({ok:true, api_key: raw, last4, id:data.id})
+})
+
+r.get('/api/apikeys', async (req,res)=>{
+  const { workspace_id } = req.query
+  const { data, error } = await s.from('api_keys').select('id,name,last4,scopes,created_at,revoked_at').eq('workspace_id', workspace_id).order('created_at',{ascending:false})
+  if (error) return res.status(500).json({ok:false,error:error.message})
+  res.json({ok:true, keys:data})
+})
+
+r.delete('/api/apikeys/:id', async (req,res)=>{
+  const { error } = await s.from('api_keys').update({ revoked_at: new Date().toISOString() }).eq('id', req.params.id)
+  if (error) return res.status(500).json({ok:false,error:error.message})
+  res.json({ok:true})
+})
+
+export default r
+```
+
+### 4) Rooms & Agents (SQL)
+
+```sql
+create table if not exists public.rooms (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null,
+  name text not null,
+  created_by uuid,
+  created_at timestamptz default now()
+);
+
+create table if not exists public.agents (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid not null,
+  name text not null,
+  type text,        -- builder|tester|ops|custom
+  voice text,
+  goal text,
+  config_json jsonb,
+  created_at timestamptz default now()
+);
+```
+
+---
+
+# UI routes to add (parity with your screenshots)
+
+* `/rooms` + sidebar “New Room”
+* `/agents/new` (guided wizard)
+* `/projects` (cards: Projects/Agents/Flows/Rooms)
+* `/usage` (charts: Daily/Weekly/Monthly + Type toggles)
+* `/settings/workspace`, `/settings/api-keys`, `/support`
+* `/integrations` (finish your Collab hub)
+
+---
+
+# Storage buckets & RLS (Supabase) — starter
+
+```sql
+-- Buckets
+insert into storage.buckets (id, name, public) values ('photos','photos',false) on conflict do nothing;
+insert into storage.buckets (id, name, public) values ('audio','audio',false) on conflict do nothing;
+insert into storage.buckets (id, name, public) values ('video','video',false) on conflict do nothing;
+insert into storage.buckets (id, name, public) values ('exports','exports',false) on conflict do nothing;
+
+-- Policies pattern (per bucket)
+create policy "Users view own photos" on storage.objects
+for select using (bucket_id = 'photos' and (owner = auth.uid() or (metadata->>'workspace_id')::uuid in (select workspace_id from workspace_members where user_id = auth.uid())));
+
+create policy "Users upload photos" on storage.objects
+for insert with check (bucket_id = 'photos' and owner = auth.uid());
+```
+
+*(repeat for audio/video/exports)*
+
+---
+
+# Recommendation: what to build **now**
+
+Go **Sprint A (Credits & Usage)** + **Sprint B (API Keys & Workspace)** first. That unlocks monetization + developer experience, and mirrors the Altan pages you showed.
+
+If you want me to ship them as ready-to-drop patches (files + diffs) like before, say:
+
+* **“ship credits+usage”**
+* **“ship api-keys+workspace”**
+
+Then we follow with **“ship rooms+agents”** and **“ship projects+media+support+integrations”**.
+
+This gets Supernova to parity on the high-impact hubs you’re missing, while keeping our security model tight (hashed keys, RLS, rate limits) and reusing the Supabase + webhooks + referrals groundwork you already have.
