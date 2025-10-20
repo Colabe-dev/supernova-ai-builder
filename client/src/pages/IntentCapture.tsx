@@ -148,7 +148,7 @@ export default function IntentCapture({ roomId }: IntentCaptureProps) {
                 {captureIntentMutation.isPending ? 'Analyzing...' : 'Capture & Analyze'}
               </Button>
 
-              {captureResult && (
+              {captureResult?.intentCapture && captureResult?.impactAnalysis && (
                 <div className="mt-6 space-y-4" data-testid="card-capture-result">
                   <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
                     <div className="flex-1">
@@ -178,7 +178,7 @@ export default function IntentCapture({ roomId }: IntentCaptureProps) {
                     </div>
                   </div>
 
-                  {captureResult.impactAnalysis.predictions.length > 0 && (
+                  {captureResult.impactAnalysis.predictions?.length > 0 && (
                     <div>
                       <h3 className="font-semibold mb-2">Predicted Issues</h3>
                       <div className="space-y-2">
@@ -200,7 +200,7 @@ export default function IntentCapture({ roomId }: IntentCaptureProps) {
                     </div>
                   )}
 
-                  {captureResult.impactAnalysis.suggestions.length > 0 && (
+                  {captureResult.impactAnalysis.suggestions?.length > 0 && (
                     <div>
                       <h3 className="font-semibold mb-2">Suggestions</h3>
                       <div className="space-y-2">

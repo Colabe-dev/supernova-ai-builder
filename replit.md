@@ -41,6 +41,8 @@ A real-time AI-assisted development system operates via WebSocket, employing a m
 - **Rooms System**: Persistent chat rooms with CRUD operations, message persistence to Postgres, shareable links, and read-only public viewer.
 - **AI Chat Builder**: Real-time collaborative development with a WebSocket-powered swarm orchestrator.
 - **Swarm Receipts**: AI action logging system with native Postgres storage, tracking plan/edit/command/test/fix operations with status, diffs, and timestamps. Viewable via Receipts tab in Workbench with auto-refresh and detail view.
+- **Living Project Model (LPM)**: AI-powered architecture guidance system that maintains a living understanding of project structure. Provides feature impact analysis, architecture recommendations, and decision history tracking. Accessible via LPM tab in Workbench.
+- **Enhanced Intent Capture**: Intelligent dependency tracking and breaking change detection system. Analyzes user actions to predict impacts, detect potential breaking changes, and suggest mitigation strategies. Features project dependency graph, impact predictions with severity scoring, and automated suggestion generation.
 - **Supabase Integration**: One-click auto-integration with existing or new Supabase projects, including setup wizard and health monitoring.
 - **Referral Tracking**: Neutral affiliate system with link generation, cookie attribution, event tracking, revenue reporting, and CSV export.
 - **Usage Analytics**: Real-time tracking and visualization of AI token usage, tasks, and system metrics.
