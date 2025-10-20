@@ -46,6 +46,11 @@ export function SharedHeader() {
                 Templates
               </span>
             </Link>
+            <Link href="/pricing">
+              <span className="text-foreground/80 hover:text-foreground transition-colors cursor-pointer">
+                Pricing
+              </span>
+            </Link>
             <Link href="/supabase">
               <span className="text-foreground/80 hover:text-foreground transition-colors cursor-pointer">
                 Supabase
