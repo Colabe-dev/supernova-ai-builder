@@ -11,6 +11,8 @@ import dbHealthRoutes from "./routes/db.health.js";
 import supabaseRoutes from "./routes/supabase.js";
 import referralsRoutes from "./routes/referrals.js";
 import billingRoutes from "./routes/billing.js";
+import creditsRoutes from "./routes/credits.js";
+import usageRoutes from "./routes/usage.js";
 import { initChatWS } from "./chat/ws";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -29,6 +31,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use(referralsRoutes);
   // Mount Billing routes (Monetization v1)
   app.use("/api/billing", billingRoutes);
+  // Mount Credits & Usage routes (Sprint A - Credits & Usage)
+  app.use("/api/credits", creditsRoutes);
+  app.use("/api/usage", usageRoutes);
   app.get("/api/projects", async (req, res) => {
     try {
       const projects = await storage.getProjects();

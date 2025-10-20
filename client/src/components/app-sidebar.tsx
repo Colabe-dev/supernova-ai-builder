@@ -1,4 +1,4 @@
-import { Code2, Folder, FileCheck, Settings, Sparkles, Terminal, GitCompare, MessageSquare, Database, Gift } from "lucide-react";
+import { Code2, Folder, FileCheck, Settings, Sparkles, Terminal, GitCompare, MessageSquare, Database, Gift, BarChart } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -54,6 +54,12 @@ const menuItems = [
     url: "/referrals",
     icon: Gift,
     testId: "link-referrals",
+  },
+  {
+    title: "Usage",
+    url: "/usage",
+    icon: BarChart,
+    testId: "link-usage",
   },
   {
     title: "Approvals",

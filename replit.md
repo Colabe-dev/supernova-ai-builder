@@ -3,6 +3,26 @@
 ## Overview
 Supernova is an intelligent application builder platform that uses AI-powered agents to scaffold, build, and deploy web and mobile applications. Its core purpose is to streamline app development through AI, offering a robust tool for creating high-quality frontend and design-centric applications with production-ready code.
 
+## Recent Updates (Sprint A - Credits & Usage - In Progress)
+**Sprint A (Credits & Usage)** deliverables completed:
+- **Credits System**: Internal-only credit grant function (grantCreditsInternal), balance/history APIs
+- **Usage Analytics**: Real-time usage tracking for AI tokens (in/out), tasks, with daily/weekly/monthly aggregation
+- **Usage Dashboard**: Interactive analytics page with time-series charts (Area/Line/Bar), summary cards, error/loading states
+- **Referral Integration**: Automatic credit grants on signup (100), purchases (10% commission), and social posts (50)
+- **Database Schema**: Supabase tables (credit_ledger, usage_events, usage_daily materialized view) with usage_summary_fn() function
+
+**⚠️  SPRINT A SECURITY LIMITATIONS (Development/Demo Only)**
+- **Referral event endpoint is unauthenticated**: /api/referrals/event can be called by anyone to mint credits
+- **Read APIs are unauthenticated**: /api/credits/balance and /api/credits/history expose data without auth
+- **Not production-ready**: Requires Sprint B workspace/auth system before deployment
+  
+**Sprint B Security Roadmap:**
+- Move credit granting to authenticated backend workflows (signup/purchase handlers)
+- Implement JWT/workspace-based authorization for all credit APIs
+- Remove direct browser access to credit-granting endpoints
+- Add authenticated context to all read APIs
+- Replace affiliate email with proper workspace/user IDs
+
 ## User Preferences
 - **Visual Priority**: Frontend quality is paramount - exceptional attention to spacing, typography, colors, and interactions
 - **Design System**: Collab Creative Studio - Refined neon aesthetic with balanced visual effects

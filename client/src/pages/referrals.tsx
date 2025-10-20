@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Copy, Download, CheckCircle, AlertCircle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, Copy, Download, CheckCircle, AlertCircle, Coins, Users, DollarSign, MessageCircle } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Link } from 'wouter';
@@ -25,10 +26,15 @@ interface HealthCheckResponse {
   error?: string;
 }
 
+interface CreditBalance {
+  ok: boolean;
+  balance: number;
+}
+
 export default function Referrals() {
   const [email, setEmail] = useState('');
   const [generatedLink, setGeneratedLink] = useState('');
-  const { toast } = useToast();
+  const { toast} = useToast();
 
   const healthQuery = useQuery<HealthCheckResponse>({
     queryKey: ['/api/db/health'],
@@ -36,6 +42,12 @@ export default function Referrals() {
   });
 
   const isSupabaseConfigured = healthQuery.data?.ok ?? false;
+
+  // Fetch credit balance using email as user_id (temporary until workspace system is implemented)
+  const creditsQuery = useQuery<CreditBalance>({
+    queryKey: ['/api/credits/balance', { user_id: email }],
+    enabled: isSupabaseConfigured && !!email,
+  });
 
   const statsQuery = useQuery<ReferralStats[]>({
     queryKey: ['/api/referrals/stats'],
@@ -84,11 +96,16 @@ export default function Referrals() {
     }
   };
 
+  const formatCredits = (credits: number) => {
+    if (credits >= 1000) return `${(credits / 1000).toFixed(1)}k`;
+    return credits.toString();
+  };
+
   return (
     <div className="container mx-auto p-6 max-w-6xl">
       <div className="mb-6">
         <h1 className="text-3xl font-bold" data-testid="text-page-title">Referral Program</h1>
-        <p className="text-muted-foreground">Generate referral links and track your performance</p>
+        <p className="text-muted-foreground">Earn $250+ in free credits by inviting others</p>
       </div>
 
       {!isSupabaseConfigured && (
@@ -103,6 +120,91 @@ export default function Referrals() {
           </AlertDescription>
         </Alert>
       )}
+
+      {/* Credits Overview */}
+      <Card className="mb-6 bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-2xl">Your Credits</CardTitle>
+              <CardDescription>Use credits for AI tokens, tasks, and builds</CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Coins className="h-8 w-8 text-primary" />
+              {creditsQuery.isLoading ? (
+                <div className="h-10 w-24 bg-muted animate-pulse rounded" />
+              ) : (
+                <div className="text-4xl font-bold" data-testid="text-credits-balance">
+                  {formatCredits(creditsQuery.data?.balance || 0)}
+                </div>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* How to Earn Credits */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Earn Free Credits</CardTitle>
+          <CardDescription>Complete these tasks to boost your credit balance</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="flex items-start gap-4 p-4 border rounded-md hover-elevate" data-testid="card-task-referral">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <Users className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold mb-1">Invite Friends</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Share your referral link and earn <Badge variant="secondary">100 credits</Badge> for each signup
+                </p>
+                <Badge variant="outline">Active</Badge>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-4 p-4 border rounded-md hover-elevate" data-testid="card-task-purchase">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <DollarSign className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold mb-1">Referral Purchase</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Earn <Badge variant="secondary">10% commission</Badge> when referrals make a purchase
+                </p>
+                <Badge variant="outline">Active</Badge>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-4 p-4 border rounded-md hover-elevate" data-testid="card-task-social">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <MessageCircle className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold mb-1">Social Sharing</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Post about Supernova on social media for <Badge variant="secondary">50 credits</Badge>
+                </p>
+                <Badge variant="outline">Coming Soon</Badge>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-4 p-4 border rounded-md hover-elevate" data-testid="card-task-bonus">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <Coins className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold mb-1">Bonus Rewards</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Special events and milestones earn you <Badge variant="secondary">bonus credits</Badge>
+                </p>
+                <Badge variant="outline">Periodic</Badge>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="mb-6">
         <CardHeader>
