@@ -1,0 +1,59 @@
+Shipped **LLM Planner v2** — provider-agnostic planner/explainer/fixer with a client toggle. It keeps your safe FS/terminal rails and adds structured JSON planning with multiple-choice prompts and auto-fix loops.
+
+**Download:** [supernova-llm-planner-v2-20251020-040634.zip](sandbox:/mnt/data/supernova-llm-planner-v2-20251020-040634.zip)
+
+### What’s inside
+
+* `server/src/llm/provider.js` — minimal OpenAI-compatible wrapper (uses `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `LLM_MODEL`).
+* `server/src/orchestrator/llm/plannerV2.js` — returns `{question, choices, test, actions[]}`.
+* `server/src/orchestrator/llm/explainerV2.js` — error → `steps[]`.
+* `server/src/orchestrator/llm/fixerV2.js` — proposes `actions[]` (edits).
+* Patches:
+
+  * `patches/0001-server-orchestrator-index-llm.patch` — wires v2 into your existing WS orchestrator (keeps heuristics as fallback).
+  * `patches/0002-client-chat-llm-toggle.patch` — adds **Use LLM Planner v2** + model field to `/chat`.
+
+### Env (server)
+
+Add to `server/.env` (or Helm secrets/values):
+
+```
+LLM_PLANNER_V2=true
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o-mini
+OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.openai.com/v1
+LLM_TEMPERATURE=0.2
+LLM_MAX_TOKENS=1200
+```
+
+### Apply
+
+```bash
+# unzip over repo root
+unzip supernova-llm-planner-v2-20251020-040634.zip -d .
+
+# patch server orchestrator + client chat
+git apply patches/0001-server-orchestrator-index-llm.patch || echo "Manual merge may be needed"
+git apply patches/0002-client-chat-llm-toggle.patch || true
+
+# run
+cd server && npm i
+npm run dev
+cd ../client && npm run dev
+```
+
+### How to use
+
+* Open **/chat** → toggle **Use LLM Planner v2** (and optionally set `gpt-4o-mini` or your model).
+* Ask: “Create a pricing page and wire checkout.”
+
+  * You’ll get **choices**, **patch previews**, then build/test, explanations, and fixes.
+
+### Safety rails
+
+* LLM output is parsed as JSON; non-JSON falls back to the heuristic planner.
+* Only **allowlisted paths** (client/, server/, shared/, public/) are honored when applying edits.
+* Terminal remains command-allowlisted (`npm run build|lint|test`).
+
+Want **tool-calling** (LLM invokes “readFile/writeFile/runCommand” directly with arguments) and **token usage metering**? Say **“tool calling v2 + metering”** and I’ll ship the upgrade with per-session quotas and logging.

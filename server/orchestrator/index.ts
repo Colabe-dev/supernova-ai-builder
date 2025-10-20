@@ -3,9 +3,14 @@ import { builder } from './roles/builder';
 import { tester } from './roles/tester';
 import { explainer } from './roles/explainer';
 import { fixer } from './roles/fixer';
+import { plannerV2 } from './llm/plannerV2.js';
+import { explainerV2 } from './llm/explainerV2.js';
+import { fixerV2 } from './llm/fixerV2.js';
 
 interface Session {
   autonomy: boolean;
+  llm: boolean;
+  model?: string;
   history: Array<{ role: string; text: string }>;
 }
 
@@ -24,16 +29,26 @@ function actTestCmd(kind: string): string {
 }
 
 export async function orchestrate({ msg, sessionId, send }: OrchestrateParams) {
-  const s = sessions.get(sessionId) || { autonomy: false, history: [] };
+  const s = sessions.get(sessionId) || { autonomy: false, llm: false, history: [] };
   sessions.set(sessionId, s);
 
   if (msg.type === 'user') {
     if (typeof msg.autonomy === 'boolean') s.autonomy = msg.autonomy;
+    if (typeof msg.llm === 'boolean') s.llm = msg.llm;
+    if (msg.model) s.model = msg.model;
     s.history.push({ role: 'user', text: msg.text });
     send({ type: 'progress', stage: 'understanding' });
 
     // 1) Plan + (optional) quick-choices
-    const plan = await planner(msg.text);
+    // Use LLM v2 if enabled globally or per-session
+    const useLLM = process.env.LLM_PLANNER_V2 === 'true' || s.llm;
+    const plan = useLLM
+      ? await plannerV2(msg.text).catch((err) => {
+          console.error('[LLM Planner v2] Error:', err.message);
+          send({ type: 'agent_message', agent: 'System', text: 'LLM unavailable, using fallback planner' });
+          return planner(msg.text);
+        })
+      : await planner(msg.text);
     if (plan.choices?.length) {
       send({
         type: 'question',
@@ -84,14 +99,25 @@ export async function orchestrate({ msg, sessionId, send }: OrchestrateParams) {
       });
 
       if (!t.ok) {
-        const explain = await explainer({ stdout: t.stdout, stderr: t.stderr });
+        const useLLM = process.env.LLM_PLANNER_V2 === 'true' || s.llm;
+        const explain = useLLM
+          ? await explainerV2({ stdout: t.stdout, stderr: t.stderr }).catch((err) => {
+              console.error('[LLM Explainer v2] Error:', err.message);
+              return explainer({ stdout: t.stdout, stderr: t.stderr });
+            })
+          : await explainer({ stdout: t.stdout, stderr: t.stderr });
         send({
           type: 'error_explained',
           text: explain.text,
           steps: explain.steps,
         });
 
-        const fix = await fixer({ stdout: t.stdout, stderr: t.stderr });
+        const fix = useLLM
+          ? await fixerV2({ stdout: t.stdout, stderr: t.stderr }).catch((err) => {
+              console.error('[LLM Fixer v2] Error:', err.message);
+              return fixer({ stdout: t.stdout, stderr: t.stderr });
+            })
+          : await fixer({ stdout: t.stdout, stderr: t.stderr });
         for (const act of fix.actions || []) {
           const prev = await builder(act);
           send({
