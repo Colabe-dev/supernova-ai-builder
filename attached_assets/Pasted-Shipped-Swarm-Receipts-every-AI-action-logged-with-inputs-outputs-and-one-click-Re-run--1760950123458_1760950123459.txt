@@ -1,0 +1,59 @@
+Shipped. **Swarm Receipts** = every AI action logged with inputs/outputs and one-click **Re-run**.
+
+**Download:** [supernova-swarm-receipts-20251020-084655.zip](sandbox:/mnt/data/supernova-swarm-receipts-20251020-084655.zip)
+
+### What’s inside
+
+* **SQL** `sql/swarm_receipts.sql`
+  `receipts(room_id, kind, status, path, diff, input, output, created_at)`
+* **Server**
+
+  * `server/src/orchestrator/receiptsHook.js` → `logReceipt(...)`
+  * `server/src/routes/receipts.js` → list/detail & **POST `/api/receipts/:id/rerun`** (supports `command`, `test`, `edit`)
+* **Orchestrator patch**
+
+  * Emits receipts at **plan → edit → command → test → fix** steps (planned/applied/ok/fail)
+* **Client**
+
+  * `client/src/pages/Receipts.jsx` → Receipts table + details + **Re-run**
+  * Workspace tabs updated with a **Receipts** tab
+  * Workbench passes the active **roomId** to Receipts
+
+### Install
+
+```bash
+unzip supernova-swarm-receipts-20251020-084655.zip -d .
+
+# DB (Supabase)
+psql < sql/swarm_receipts.sql
+
+# Server patches
+git apply patches/0001-server-orchestrator-receipts.patch || echo "merge orchestrator/index.js manually"
+git apply patches/0002-server-index-mount-receipts.patch  || echo "merge server/index.js manually"
+
+# Client patches
+git apply patches/0003-client-workspace-receipts-tab.patch || echo "merge WorkspaceTabs.jsx manually"
+git apply patches/0004-client-workbench-pass-roomid.patch  || echo "merge Workbench.jsx manually"
+
+cd server && npm run dev
+cd ../client && npm run dev
+```
+
+### How it works
+
+* When you run a prompt in **Workbench** (left), actions are recorded as **receipts** with:
+
+  * `kind`: `plan | edit | command | test | fix`
+  * `status`: `planned | applied | ok | fail | skipped`
+  * `input/output`: serialized tool IO
+  * `diff` & `path` for edits
+* Go to **Receipts** tab (right) → inspect details or **Re-run** a receipt (idempotent re-apply for `edit`, re-exec for `command`/`test`).
+
+---
+
+### Next 2 upgrades to finish the uniqueness loop
+
+1. **“ship pox ledger”** → cryptographically signed receipts (JWS/HMAC) + green “Proven” badges.
+2. **“ship project graph”** → code dependency graph + impact-based test selection + self-heal.
+
+Say the word and I’ll drop those overlays.

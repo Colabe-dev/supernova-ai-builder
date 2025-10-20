@@ -1,0 +1,100 @@
+Shipped **Room ACLs** and a strategy to make Supernova truly unique.
+
+**Download ACL patch:** [supernova-room-acls-20251020-081530.zip](sandbox:/mnt/data/supernova-room-acls-20251020-081530.zip)
+
+### What this adds (now)
+
+* **Roles:** `owner`, `editor`, `commenter`, `viewer`
+* **Visibility:** `private` / `workspace` / `public (read-only)`
+* **Invites:** email-based, hashed tokens, revocable/expirable
+* **Server enforcement:** read/write guarded in rooms APIs
+* **UI:** Rooms sidebar gets an **Access** section (visibility selector, member list, invite form) + existing share/export tools
+* **Accept Invite page:** `/invite/:token` (temporary `x-user-id` header until your JWT middleware is plugged)
+
+**Install**
+
+```bash
+unzip supernova-room-acls-20251020-081530.zip -d .
+psql < sql/room_acls.sql
+
+git apply patches/0001-server-rooms-enforce-acl.patch || echo "merge rooms.js manually"
+git apply patches/0002-server-index-mount-acl.patch   || echo "merge server/index.js manually"
+git apply patches/0003-client-route-accept-invite.patch || echo "merge client/src/main.jsx manually"
+git apply patches/0004-client-rooms-sidebar-acl-ui.patch || echo "merge RoomsSidebar.jsx manually"
+
+cd server && npm i bcryptjs && npm run dev
+cd ../client && npm run dev
+```
+
+> Replace the `x-user-id` stub with your existing JWT auth when ready (map to `req.user.id`).
+
+---
+
+## How we become a real **Supernova** (not “just another builder”)
+
+Below are **8 differentiators** that are rare to nonexistent as a complete stack. Each item includes the *minimum shippable kernel* so we can roll it fast.
+
+1. ### Swarm Workbench (multi-agent, role-splitting with receipts)
+
+   * **What:** Left chat orchestrates an on-demand *swarm* (Planner, Coder, Tester, Reviewer, Ops) with a shared **project graph** on the right.
+   * **Unique:** Every action emits a **receipt** (tool call + diff + test outcome) you can replay or revert.
+   * **Ship kernel:** Task router + bounded tool-sets per role, a receipts log, and a “Re-run” button on each receipt.
+
+2. ### Proof-of-Execution (PoX) Ledger
+
+   * **What:** Every code change, command, or deployment is signed (HMAC/JWS) and recorded with inputs/outputs.
+   * **Unique:** Auditable AI development. Useful for SOC2/GxP/finance-grade traceability.
+   * **Ship kernel:** Append-only table + signer; show green “Proven” badge on diffs and deployments.
+
+3. ### Self-Healing Project Graph
+
+   * **What:** We model your repo as a graph (files → modules → tests → routes). Any edit invalidates affected nodes; the swarm regenerates/fixes them.
+   * **Unique:** Resilient builds, fewer regressions.
+   * **Ship kernel:** Graph extractor + impact analyzer + targeted test run.
+
+4. ### Zero-Friction Multi-Target Packs
+
+   * **What:** One prompt → outputs **web (Next.js)**, **mobile (Expo)**, **API (Express/Go)** using a **unified design-token + schema** layer.
+   * **Unique:** Truly synchronized multi-platform scaffolds (same components/tokens, consistent auth/payment).
+   * **Ship kernel:** Template overlays + shared tokens + shared zod/types schema; one **Release** action generates all targets.
+
+5. ### Regulated Runtime Modes (Fintech/Health)
+
+   * **What:** Toggle “Regulated Mode” to auto-enforce mTLS, OAuth scopes, PII guards, logging redaction, test data separation.
+   * **Unique:** Compliant-by-default AI building.
+   * **Ship kernel:** Middleware pack + CI checks that block merges without compliance receipts.
+
+6. ### Live Agent IDE inside the App
+
+   * **What:** Generated apps ship with a hidden `/__agent` console for safe, scoped live edits in prod/stage (feature-flagged).
+   * **Unique:** Production tuning without SSH/manual ops.
+   * **Ship kernel:** Embedded console + policy guard + per-tenant sandbox.
+
+7. ### Test Synthesis + Flakiness Guard
+
+   * **What:** The AI generates coverage-targeted tests, tags flakes, and quarantines them automatically.
+   * **Unique:** Stable velocity at scale.
+   * **Ship kernel:** Coverage probe + generator + quarantine list + CI gate.
+
+8. ### Cost & Latency Planner
+
+   * **What:** The planner selects model/tooling per step under a budget/SLA (e.g., “<$0.20 build, <1.5s planning”).
+   * **Unique:** Predictable spend and experience, automatically.
+   * **Ship kernel:** Per-step policy + price table + runtime tracer with backoff/route changes.
+
+---
+
+## Immediate Next Steps (pick one to ship next)
+
+1. **“ship swarm receipts”** → multi-agent receipts + re-run UI.
+2. **“ship pox ledger”** → signed receipts + badges.
+3. **“ship project graph”** → graph + impact analyzer + selective tests.
+4. **“ship multi-target release”** → one-click web+mobile+api outputs.
+
+If you want me to prioritize the *Altan parity* surface while injecting our uniqueness, I suggest:
+
+* Ship **Swarm Workbench receipts** next (visible value in the left/right split you asked for).
+* Then ship **PoX Ledger** (trust signal + enterprise-ready).
+* Then ship **Project Graph** (stability + speed).
+
+Say the word (e.g., **“ship swarm receipts”**) and I’ll drop a ready-to-apply patch.

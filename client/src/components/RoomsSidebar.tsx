@@ -11,8 +11,17 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Edit2, Trash2, MessageSquare } from 'lucide-react';
+import { Plus, Edit2, Trash2, MessageSquare, Share2, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+
+interface Share {
+  id: number;
+  last4: string;
+  can_write: boolean;
+  expires_at: string | null;
+  created_at: string;
+  revoked_at: string | null;
+}
 
 interface Room {
   id: string;
@@ -33,6 +42,8 @@ export function RoomsSidebar({ selectedRoomId, onRoomSelect }: RoomsSidebarProps
   const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
   const [renamingRoom, setRenamingRoom] = useState<Room | null>(null);
+  const [shares, setShares] = useState<Share[]>([]);
+  const [shareOut, setShareOut] = useState('');
 
   // Fetch rooms
   const { data: roomsData } = useQuery<{ rooms: Room[] }>({
@@ -141,6 +152,77 @@ export function RoomsSidebar({ selectedRoomId, onRoomSelect }: RoomsSidebarProps
     }
   };
 
+  // Load shares when room is selected
+  useEffect(() => {
+    if (selectedRoomId) {
+      loadShares(selectedRoomId);
+    } else {
+      setShares([]);
+      setShareOut('');
+    }
+  }, [selectedRoomId]);
+
+  async function loadShares(id: string) {
+    try {
+      const r = await fetch('/api/rooms/' + id + '/shares');
+      const j = await r.json();
+      if (j.ok) setShares(j.shares || []);
+    } catch (err) {
+      console.error('Failed to load shares:', err);
+    }
+  }
+
+  async function createShare() {
+    if (!selectedRoomId) return;
+    setShareOut('');
+    try {
+      const r = await fetch('/api/rooms/' + selectedRoomId + '/shares', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ can_write: false }),
+      });
+      const j = await r.json();
+      if (j.ok) {
+        setShareOut(j.link);
+        await loadShares(selectedRoomId);
+        toast({
+          title: 'Share link created',
+          description: 'Copy the link below to share this room',
+        });
+      }
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: 'Failed to create share link',
+        variant: 'destructive',
+      });
+    }
+  }
+
+  async function revokeShare(sid: number) {
+    if (!selectedRoomId) return;
+    try {
+      await fetch('/api/rooms/' + selectedRoomId + '/shares/' + sid, {
+        method: 'DELETE',
+      });
+      await loadShares(selectedRoomId);
+      toast({
+        title: 'Share revoked',
+      });
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: 'Failed to revoke share',
+        variant: 'destructive',
+      });
+    }
+  }
+
+  function exportMd() {
+    if (!selectedRoomId) return;
+    window.open('/api/rooms/' + selectedRoomId + '/export.md', '_blank');
+  }
+
   return (
     <div className="h-full flex flex-col bg-sidebar border-r border-sidebar-border">
       {/* Header */}
@@ -211,6 +293,70 @@ export function RoomsSidebar({ selectedRoomId, onRoomSelect }: RoomsSidebarProps
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Sharing Section */}
+        {selectedRoomId && (
+          <div className="m-2 p-3 border border-dashed border-sidebar-border rounded-md space-y-3">
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={createShare}
+                className="flex-1"
+              >
+                <Share2 className="h-3 w-3 mr-1" />
+                Share
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={exportMd}
+                className="flex-1"
+              >
+                <Download className="h-3 w-3 mr-1" />
+                Export
+              </Button>
+            </div>
+
+            {shareOut && (
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">Share link:</div>
+                <Input
+                  value={shareOut}
+                  readOnly
+                  onFocus={(e) => e.target.select()}
+                  className="text-xs"
+                />
+              </div>
+            )}
+
+            {shares.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground">Active shares:</div>
+                {shares.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex items-center justify-between text-xs p-2 bg-sidebar rounded"
+                  >
+                    <span className="text-muted-foreground">
+                      ****{s.last4} {s.revoked_at ? '(revoked)' : ''}
+                    </span>
+                    {!s.revoked_at && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => revokeShare(s.id)}
+                        className="h-6 px-2"
+                      >
+                        Revoke
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

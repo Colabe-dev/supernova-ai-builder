@@ -24,6 +24,7 @@ import Referrals from "@/pages/referrals";
 import Pricing from "@/pages/pricing";
 import Usage from "@/pages/usage";
 import Workbench from "@/pages/Workbench";
+import SharedRoom from "@/pages/SharedRoom";
 import NotFound from "@/pages/not-found";
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -127,6 +128,7 @@ function Router() {
       </Route>
       <Route path="/pricing" component={Pricing} />
       <Route path="/workbench" component={Workbench} />
+      <Route path="/r/:token" component={SharedRoom} />
       <Route component={NotFound} />
       </Switch>
     </AppShell>
