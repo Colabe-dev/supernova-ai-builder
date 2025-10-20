@@ -25,6 +25,8 @@ import Pricing from "@/pages/pricing";
 import Usage from "@/pages/usage";
 import Workbench from "@/pages/Workbench";
 import SharedRoom from "@/pages/SharedRoom";
+import IntentCapture from "@/pages/IntentCapture";
+import SelfHealing from "@/pages/SelfHealing";
 import NotFound from "@/pages/not-found";
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -123,6 +125,20 @@ function Router() {
         {() => (
           <DashboardLayout>
             <Usage />
+          </DashboardLayout>
+        )}
+      </Route>
+      <Route path="/intent">
+        {() => (
+          <DashboardLayout>
+            <IntentCapture roomId={null} />
+          </DashboardLayout>
+        )}
+      </Route>
+      <Route path="/healing">
+        {() => (
+          <DashboardLayout>
+            <SelfHealing roomId={null} />
           </DashboardLayout>
         )}
       </Route>

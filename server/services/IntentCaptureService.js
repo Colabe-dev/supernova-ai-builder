@@ -202,6 +202,14 @@ class IntentCaptureService {
     return result.rows;
   }
 
+  async getIntentById(intentId) {
+    const result = await this.pool.query(
+      'SELECT * FROM intent_captures WHERE id = $1',
+      [intentId]
+    );
+    return result.rows[0] || null;
+  }
+
   async close() {
     await this.pool.end();
   }
