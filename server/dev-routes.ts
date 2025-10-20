@@ -179,28 +179,30 @@ setInterval(() => {
   });
 }, 30_000);
 
-// Terminal - whitelist commands only
-const ALLOWED_COMMANDS = new Set([
-  "node -v",
-  "npm -v",
-  "npm run build",
-  "npm run lint",
-  "echo ok",
-]);
+// Terminal - command mapping (defense-in-depth)
+const ALLOWED_COMMANDS: Record<string, string> = {
+  "node -v": "node -v",
+  "npm -v": "npm -v",
+  "npm run build": "npm run build",
+  "npm run lint": "npm run lint",
+  "echo ok": "echo ok",
+};
 
 router.post("/dev/terminal", guard("DEV_TERMINAL_ENABLE"), async (req: Request, res: Response) => {
   const { cmd } = req.body || {};
-  if (!ALLOWED_COMMANDS.has(cmd)) {
+  const mappedCmd = ALLOWED_COMMANDS[cmd];
+  
+  if (!mappedCmd) {
     logger.warn({ event: "terminal.denied", cmd });
     return res.status(400).json({ error: "Command not allowed" });
   }
 
   // Audit log (whitelisted but still logged)
-  logger.info({ event: "terminal.exec", cmd });
+  logger.info({ event: "terminal.exec", cmd: mappedCmd });
 
-  exec(cmd, { timeout: 60_000 }, (err, stdout, stderr) => {
+  exec(mappedCmd, { timeout: 60_000 }, (err, stdout, stderr) => {
     if (err) {
-      logger.error({ event: "terminal.error", cmd, error: err.message });
+      logger.error({ event: "terminal.error", cmd: mappedCmd, error: err.message });
       return res.status(500).json({
         ok: false,
         error: err.message,
