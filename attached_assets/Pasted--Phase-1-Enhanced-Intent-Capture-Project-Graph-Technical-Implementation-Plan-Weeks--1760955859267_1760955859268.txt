@@ -1,0 +1,808 @@
+# 🚀 **Phase 1: Enhanced Intent Capture & Project Graph**
+## **Technical Implementation Plan (Weeks 1-2)**
+
+Let me build the complete foundation for the Self-Healing Intent System, integrating directly with your existing Supernova architecture.
+
+## 📁 **File Structure to Implement**
+
+### **1. Enhanced Database Schema** (`/sql/intent_capture.sql`)
+```sql
+-- Extend your existing schema
+CREATE TABLE intent_captures (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
+  user_action TEXT NOT NULL,
+  user_intent TEXT,
+  context_before JSONB,
+  context_after JSONB,
+  confidence_score FLOAT DEFAULT 0.0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE project_dependencies (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
+  source_type TEXT NOT NULL, -- 'file', 'component', 'api', 'data_model'
+  source_id TEXT NOT NULL,
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  relationship_type TEXT NOT NULL, -- 'imports', 'calls', 'references', 'styles', 'depends_on'
+  coupling_strength FLOAT DEFAULT 0.5,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE impact_predictions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
+  intent_capture_id UUID REFERENCES intent_captures(id),
+  prediction_type TEXT NOT NULL, -- 'breaking_change', 'performance', 'security'
+  description TEXT NOT NULL,
+  severity INTEGER CHECK (severity >= 1 AND severity <= 10),
+  affected_components JSONB, -- Array of affected items
+  auto_fix_suggestion JSONB,
+  confidence FLOAT DEFAULT 0.0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for performance
+CREATE INDEX idx_intent_room_id ON intent_captures(room_id);
+CREATE INDEX idx_dependencies_room_id ON project_dependencies(room_id);
+CREATE INDEX idx_dependencies_source ON project_dependencies(source_type, source_id);
+CREATE INDEX idx_dependencies_target ON project_dependencies(target_type, target_id);
+CREATE INDEX idx_predictions_intent ON impact_predictions(intent_capture_id);
+```
+
+### **2. Project Graph Service** (`/server/services/ProjectGraphService.js`)
+```javascript
+const { supabase } = require('../lib/supabase');
+
+class ProjectGraphService {
+  constructor(roomId) {
+    this.roomId = roomId;
+    this.graph = new Map();
+    this.dependencyCache = new Map();
+  }
+
+  async initialize() {
+    await this.loadDependencies();
+    return this;
+  }
+
+  async loadDependencies() {
+    const { data: dependencies, error } = await supabase
+      .from('project_dependencies')
+      .select('*')
+      .eq('room_id', this.roomId);
+
+    if (error) throw error;
+
+    // Build in-memory graph for fast traversal
+    dependencies.forEach(dep => {
+      const key = `${dep.source_type}:${dep.source_id}`;
+      if (!this.graph.has(key)) {
+        this.graph.set(key, []);
+      }
+      this.graph.get(key).push({
+        target: `${dep.target_type}:${dep.target_id}`,
+        type: dep.relationship_type,
+        strength: dep.coupling_strength,
+        metadata: dep.metadata
+      });
+    });
+  }
+
+  async trackDependency(sourceType, sourceId, targetType, targetId, relationshipType, metadata = {}) {
+    const couplingStrength = this.calculateCouplingStrength(relationshipType, metadata);
+
+    const { error } = await supabase
+      .from('project_dependencies')
+      .upsert([{
+        room_id: this.roomId,
+        source_type: sourceType,
+        source_id: sourceId,
+        target_type: targetType,
+        target_id: targetId,
+        relationship_type: relationshipType,
+        coupling_strength: couplingStrength,
+        metadata: metadata,
+        updated_at: new Date().toISOString()
+      }], {
+        onConflict: 'room_id,source_type,source_id,target_type,target_id'
+      });
+
+    if (error) {
+      console.error('Failed to track dependency:', error);
+      return;
+    }
+
+    // Update in-memory graph
+    const key = `${sourceType}:${sourceId}`;
+    if (!this.graph.has(key)) {
+      this.graph.set(key, []);
+    }
+    
+    this.graph.set(key, this.graph.get(key).filter(d => 
+      d.target !== `${targetType}:${targetId}`
+    ));
+    
+    this.graph.get(key).push({
+      target: `${targetType}:${targetId}`,
+      type: relationshipType,
+      strength: couplingStrength,
+      metadata
+    });
+  }
+
+  calculateCouplingStrength(relationshipType, metadata) {
+    const baseStrengths = {
+      'imports': 0.8,
+      'calls': 0.9,
+      'references': 0.7,
+      'extends': 0.95,
+      'implements': 0.9,
+      'styles': 0.4,
+      'depends_on': 0.6
+    };
+
+    let strength = baseStrengths[relationshipType] || 0.5;
+
+    // Adjust based on metadata
+    if (metadata.isCritical) strength += 0.2;
+    if (metadata.frequency === 'high') strength += 0.1;
+    if (metadata.isOptional) strength -= 0.3;
+
+    return Math.max(0.1, Math.min(1.0, strength));
+  }
+
+  async findImpact(targetType, targetId, changeType = 'modification') {
+    const targetKey = `${targetType}:${targetId}`;
+    const visited = new Set();
+    const impact = {
+      direct_dependencies: [],
+      transitive_dependencies: [],
+      breaking_changes: [],
+      suggestions: []
+    };
+
+    await this.traverseDependencies(targetKey, visited, impact, 0);
+
+    // Analyze impact based on change type
+    await this.analyzeBreakingChanges(impact, changeType, targetType, targetId);
+
+    return impact;
+  }
+
+  async traverseDependencies(currentKey, visited, impact, depth) {
+    if (visited.has(currentKey) || depth > 10) return;
+    visited.add(currentKey);
+
+    const dependencies = this.graph.get(currentKey) || [];
+
+    for (const dep of dependencies) {
+      if (depth === 0) {
+        impact.direct_dependencies.push({
+          ...dep,
+          target: dep.target
+        });
+      } else {
+        impact.transitive_dependencies.push({
+          ...dep,
+          target: dep.target,
+          depth: depth
+        });
+      }
+
+      // Recursive traversal
+      await this.traverseDependencies(dep.target, visited, impact, depth + 1);
+    }
+  }
+
+  async analyzeBreakingChanges(impact, changeType, targetType, targetId) {
+    const breakingChangeRules = {
+      'file': {
+        'deletion': { severity: 9, message: 'File deletion will break imports' },
+        'rename': { severity: 7, message: 'Renaming will break import paths' },
+        'modification': { severity: 3, message: 'Modification may affect dependents' }
+      },
+      'api': {
+        'deletion': { severity: 10, message: 'API endpoint deletion will break clients' },
+        'modification': { severity: 6, message: 'API signature change may break clients' }
+      },
+      'data_model': {
+        'modification': { severity: 8, message: 'Data model change may break queries and UI' },
+        'deletion': { severity: 9, message: 'Field deletion will break dependent code' }
+      }
+    };
+
+    const rule = breakingChangeRules[targetType]?.[changeType];
+    if (rule) {
+      impact.breaking_changes.push({
+        ...rule,
+        change_type: changeType,
+        target: `${targetType}:${targetId}`
+      });
+    }
+
+    // Generate suggestions based on impact analysis
+    impact.suggestions = this.generateMigrationSuggestions(impact, changeType, targetType);
+  }
+
+  generateMigrationSuggestions(impact, changeType, targetType) {
+    const suggestions = [];
+
+    if (impact.direct_dependencies.length > 0) {
+      suggestions.push({
+        type: 'backward_compatibility',
+        description: `Add backward compatibility layer for ${impact.direct_dependencies.length} direct dependents`,
+        priority: 'high'
+      });
+    }
+
+    if (impact.transitive_dependencies.length > 0) {
+      suggestions.push({
+        type: 'gradual_migration',
+        description: `Plan gradual migration for ${impact.transitive_dependencies.length} transitive dependents`,
+        priority: 'medium'
+      });
+    }
+
+    if (changeType === 'deletion') {
+      suggestions.push({
+        type: 'deprecation_notice',
+        description: 'Mark as deprecated before full removal',
+        priority: 'high'
+      });
+    }
+
+    return suggestions;
+  }
+
+  // Scan existing codebase to build initial dependency graph
+  async scanCodebase(fileTree, fileContents) {
+    for (const file of fileTree) {
+      if (file.path.endsWith('.js') || file.path.endsWith('.jsx') || file.path.endsWith('.ts') || file.path.endsWith('.tsx')) {
+        await this.analyzeFileDependencies(file.path, fileContents[file.path]);
+      }
+    }
+  }
+
+  async analyzeFileDependencies(filePath, content) {
+    // Simple regex-based dependency analysis (replace with proper AST parser later)
+    const importRegex = /from\s+['"]([^'"]+)['"]|require\(\s*['"]([^'"]+)['"]\)/g;
+    const apiCallRegex = /fetch\(\s*['"]([^'"]+)['"]|axios\.get\(\s*['"]([^'"]+)['"]/g;
+    
+    let match;
+    
+    // Track imports
+    while ((match = importRegex.exec(content)) !== null) {
+      const importPath = match[1] || match[2];
+      await this.trackDependency('file', filePath, 'file', importPath, 'imports', {
+        line: this.getLineNumber(content, match.index),
+        isInternal: !importPath.startsWith('.') ? false : true
+      });
+    }
+
+    // Track API calls
+    while ((match = apiCallRegex.exec(content)) !== null) {
+      const apiPath = match[1] || match[2];
+      await this.trackDependency('file', filePath, 'api', apiPath, 'calls', {
+        line: this.getLineNumber(content, match.index),
+        method: this.detectHttpMethod(content, match.index)
+      });
+    }
+  }
+
+  getLineNumber(content, index) {
+    return content.substring(0, index).split('\n').length;
+  }
+
+  detectHttpMethod(content, index) {
+    const before = content.substring(Math.max(0, index - 20), index);
+    if (before.includes('post')) return 'POST';
+    if (before.includes('put')) return 'PUT';
+    if (before.includes('delete')) return 'DELETE';
+    return 'GET';
+  }
+}
+
+module.exports = ProjectGraphService;
+```
+
+### **3. Intent Capture Service** (`/server/services/IntentCaptureService.js`)
+```javascript
+const { supabase } = require('../lib/supabase');
+
+class IntentCaptureService {
+  constructor(roomId, projectGraph) {
+    this.roomId = roomId;
+    this.projectGraph = projectGraph;
+  }
+
+  async captureUserAction(action, context = {}) {
+    const intent = this.extractIntent(action, context);
+    
+    const { data: intentCapture, error } = await supabase
+      .from('intent_captures')
+      .insert([{
+        room_id: this.roomId,
+        user_action: action,
+        user_intent: intent.declaredIntent,
+        context_before: context.before,
+        context_after: context.after,
+        confidence_score: intent.confidence
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Analyze impact of this action
+    const impact = await this.analyzeActionImpact(action, intent, context);
+    
+    return {
+      intentCapture,
+      impactAnalysis: impact
+    };
+  }
+
+  extractIntent(action, context) {
+    // Simple NLP for intent extraction (can be enhanced with ML later)
+    const actionLower = action.toLowerCase();
+    
+    const intentPatterns = {
+      refactor: ['rename', 'refactor', 'restructure', 'clean up', 'improve'],
+      feature: ['add', 'create', 'implement', 'new feature', 'build'],
+      fix: ['fix', 'repair', 'solve', 'resolve', 'debug'],
+      optimize: ['optimize', 'speed up', 'improve performance', 'make faster'],
+      security: ['secure', 'protect', 'auth', 'login', 'password']
+    };
+
+    let declaredIntent = 'modification';
+    let confidence = 0.7;
+
+    for (const [intent, patterns] of Object.entries(intentPatterns)) {
+      if (patterns.some(pattern => actionLower.includes(pattern))) {
+        declaredIntent = intent;
+        confidence = 0.9;
+        break;
+      }
+    }
+
+    return { declaredIntent, confidence };
+  }
+
+  async analyzeActionImpact(action, intent, context) {
+    // Parse action to understand what's being changed
+    const changeTarget = this.parseChangeTarget(action, context);
+    
+    if (!changeTarget) {
+      return { predictions: [], overallRisk: 0 };
+    }
+
+    const impact = await this.projectGraph.findImpact(
+      changeTarget.type, 
+      changeTarget.id, 
+      this.mapIntentToChangeType(intent.declaredIntent)
+    );
+
+    // Store predictions
+    const predictions = [];
+    for (const breakingChange of impact.breaking_changes) {
+      const { data: prediction, error } = await supabase
+        .from('impact_predictions')
+        .insert([{
+          room_id: this.roomId,
+          intent_capture_id: context.intentCaptureId,
+          prediction_type: 'breaking_change',
+          description: breakingChange.message,
+          severity: breakingChange.severity,
+          affected_components: impact.direct_dependencies.map(d => d.target),
+          auto_fix_suggestion: impact.suggestions,
+          confidence: 0.8
+        }])
+        .select()
+        .single();
+
+      if (!error) predictions.push(prediction);
+    }
+
+    return {
+      predictions,
+      overallRisk: Math.max(...impact.breaking_changes.map(bc => bc.severity), 0),
+      impactAnalysis: impact
+    };
+  }
+
+  parseChangeTarget(action, context) {
+    // Simple parsing - enhance with more sophisticated NLP
+    if (action.includes('rename') || action.includes('file')) {
+      const fileMatch = action.match(/(\w+\.\w+)/);
+      if (fileMatch) {
+        return { type: 'file', id: fileMatch[1] };
+      }
+    }
+
+    if (action.includes('api') || action.includes('endpoint')) {
+      const apiMatch = action.match(/(\/api\/\w+)/);
+      if (apiMatch) {
+        return { type: 'api', id: apiMatch[1] };
+      }
+    }
+
+    // Fallback to context analysis
+    if (context.before?.filePath) {
+      return { type: 'file', id: context.before.filePath };
+    }
+
+    return null;
+  }
+
+  mapIntentToChangeType(intent) {
+    const mapping = {
+      'refactor': 'modification',
+      'feature': 'addition', 
+      'fix': 'modification',
+      'optimize': 'modification',
+      'security': 'modification',
+      'modification': 'modification'
+    };
+    return mapping[intent] || 'modification';
+  }
+}
+
+module.exports = IntentCaptureService;
+```
+
+### **4. Enhanced Swarm Agent with Intent** (`/server/agents/IntentAwareArchitectAgent.js`)
+```javascript
+const ArchitectAgent = require('./ArchitectAgent');
+const ProjectGraphService = require('../services/ProjectGraphService');
+const IntentCaptureService = require('../services/IntentCaptureService');
+
+class IntentAwareArchitectAgent extends ArchitectAgent {
+  constructor(roomId) {
+    super(roomId);
+    this.projectGraph = null;
+    this.intentService = null;
+    this.initialized = false;
+  }
+
+  async initialize() {
+    this.projectGraph = await new ProjectGraphService(this.roomId).initialize();
+    this.intentService = new IntentCaptureService(this.roomId, this.projectGraph);
+    this.initialized = true;
+    
+    // Initial codebase scan if needed
+    await this.scanExistingCodebase();
+  }
+
+  async scanExistingCodebase() {
+    // Get current file tree and contents
+    const fileTree = await this.getFileTree();
+    const fileContents = await this.getFileContents(fileTree);
+    
+    await this.projectGraph.scanCodebase(fileTree, fileContents);
+  }
+
+  async processUserRequest(userMessage, context = {}) {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    // Capture intent before processing
+    const { intentCapture, impactAnalysis } = await this.intentService.captureUserAction(
+      userMessage, 
+      context
+    );
+
+    // Enhanced prompt with intent and impact analysis
+    const enhancedPrompt = this.buildIntentAwarePrompt(
+      userMessage, 
+      intentCapture, 
+      impactAnalysis
+    );
+
+    const response = await super.processUserRequest(enhancedPrompt, context);
+
+    // Log architectural decision with impact context
+    await this.logArchitecturalDecision({
+      user_intent: intentCapture.user_intent,
+      user_action: userMessage,
+      impact_analysis: impactAnalysis,
+      ai_response: response,
+      confidence: intentCapture.confidence_score
+    });
+
+    return {
+      ...response,
+      intent_capture: intentCapture,
+      impact_analysis: impactAnalysis
+    };
+  }
+
+  buildIntentAwarePrompt(userMessage, intentCapture, impactAnalysis) {
+    return `
+USER INTENT ANALYSIS:
+- Primary Intent: ${intentCapture.user_intent}
+- Confidence: ${(intentCapture.confidence_score * 100).toFixed(1)}%
+- Risk Level: ${impactAnalysis.overallRisk}/10
+
+IMPACT PREDICTION:
+${impactAnalysis.predictions.map(pred => 
+  `- ${pred.description} (Severity: ${pred.severity}/10)`
+).join('\n')}
+
+MIGRATION SUGGESTIONS:
+${impactAnalysis.impactAnalysis?.suggestions?.map(s => 
+  `- ${s.description} [${s.priority}]`
+).join('\n') || 'No major suggestions'}
+
+USER REQUEST:
+${userMessage}
+
+ARCHITECT GUIDANCE:
+Please provide a solution that:
+1. Addresses the user's core intent: "${intentCapture.user_intent}"
+2. Minimizes breaking changes based on the impact analysis
+3. Follows the migration suggestions where appropriate
+4. Maintains backward compatibility if high-risk changes are needed
+5. Considers the existing project architecture and patterns
+
+Provide both the implementation AND a migration strategy if needed.
+`;
+  }
+
+  async getFileTree() {
+    // Integrate with your existing file system API
+    // This is a placeholder - replace with your actual implementation
+    const response = await fetch(`/api/dev/fs?room_id=${this.roomId}`);
+    const data = await response.json();
+    return data.files || [];
+  }
+
+  async getFileContents(fileTree) {
+    const contents = {};
+    // Implementation depends on your file storage
+    // Placeholder - integrate with your actual file content retrieval
+    for (const file of fileTree) {
+      // Mock content retrieval
+      contents[file.path] = `// Content of ${file.path}`;
+    }
+    return contents;
+  }
+}
+
+module.exports = IntentAwareArchitectAgent;
+```
+
+### **5. API Routes for Intent System** (`/server/routes/intentSystem.js`)
+```javascript
+const express = require('express');
+const router = express.Router();
+const ProjectGraphService = require('../services/ProjectGraphService');
+const IntentCaptureService = require('../services/IntentCaptureService');
+
+// Initialize project graph for a room
+router.post('/:room_id/graph/initialize', async (req, res) => {
+  try {
+    const { room_id } = req.params;
+    const projectGraph = await new ProjectGraphService(room_id).initialize();
+    
+    res.json({ 
+      success: true, 
+      message: 'Project graph initialized',
+      stats: {
+        nodes: projectGraph.graph.size,
+        dependencies: Array.from(projectGraph.graph.values()).flat().length
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Capture user intent
+router.post('/:room_id/intent/capture', async (req, res) => {
+  try {
+    const { room_id } = req.params;
+    const { action, context } = req.body;
+
+    const projectGraph = await new ProjectGraphService(room_id).initialize();
+    const intentService = new IntentCaptureService(room_id, projectGraph);
+    
+    const result = await intentService.captureUserAction(action, context);
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Analyze impact of a proposed change
+router.post('/:room_id/impact/analyze', async (req, res) => {
+  try {
+    const { room_id } = req.params;
+    const { target_type, target_id, change_type } = req.body;
+
+    const projectGraph = await new ProjectGraphService(room_id).initialize();
+    const impact = await projectGraph.findImpact(target_type, target_id, change_type);
+    
+    res.json({ impact });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get project health report
+router.get('/:room_id/health', async (req, res) => {
+  try {
+    const { room_id } = req.params;
+    const projectGraph = await new ProjectGraphService(room_id).initialize();
+    
+    // Basic health metrics
+    const allDeps = Array.from(projectGraph.graph.values()).flat();
+    const highCoupling = allDeps.filter(d => d.strength > 0.8).length;
+    
+    const healthReport = {
+      total_dependencies: allDeps.length,
+      high_coupling_dependencies: highCoupling,
+      coupling_health: highCoupling / allDeps.length < 0.2 ? 'good' : 'needs_attention',
+      graph_completeness: 'unknown' // Could be enhanced with more metrics
+    };
+    
+    res.json({ health_report: healthReport });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Scan codebase and build dependency graph
+router.post('/:room_id/graph/scan', async (req, res) => {
+  try {
+    const { room_id } = req.params;
+    const { file_tree, file_contents } = req.body;
+
+    const projectGraph = await new ProjectGraphService(room_id).initialize();
+    await projectGraph.scanCodebase(file_tree, file_contents);
+    
+    res.json({ 
+      success: true, 
+      message: 'Codebase scanned and dependencies mapped',
+      dependencies_tracked: projectGraph.graph.size
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+module.exports = router;
+```
+
+### **6. Client-Side Hook** (`/client/src/hooks/useIntentSystem.js`)
+```javascript
+import { useState, useEffect } from 'react';
+import { useRoom } from './useRoom';
+
+export function useIntentSystem() {
+  const { roomId } = useRoom();
+  const [projectGraph, setProjectGraph] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [health, setHealth] = useState(null);
+
+  useEffect(() => {
+    if (roomId) {
+      initializeGraph();
+    }
+  }, [roomId]);
+
+  const initializeGraph = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/intent-system/${roomId}/graph/initialize`, {
+        method: 'POST'
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        setProjectGraph(data.stats);
+        await loadHealthReport();
+      }
+    } catch (error) {
+      console.error('Failed to initialize project graph:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const captureIntent = async (action, context = {}) => {
+    try {
+      const response = await fetch(`/api/intent-system/${roomId}/intent/capture`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, context })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to capture intent:', error);
+      throw error;
+    }
+  };
+
+  const analyzeImpact = async (targetType, targetId, changeType = 'modification') => {
+    try {
+      const response = await fetch(`/api/intent-system/${roomId}/impact/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_type: targetType, target_id: targetId, change_type: changeType })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to analyze impact:', error);
+      throw error;
+    }
+  };
+
+  const loadHealthReport = async () => {
+    try {
+      const response = await fetch(`/api/intent-system/${roomId}/health`);
+      const data = await response.json();
+      setHealth(data.health_report);
+    } catch (error) {
+      console.error('Failed to load health report:', error);
+    }
+  };
+
+  const scanCodebase = async (fileTree, fileContents) => {
+    try {
+      const response = await fetch(`/api/intent-system/${roomId}/graph/scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_tree: fileTree, file_contents: fileContents })
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to scan codebase:', error);
+      throw error;
+    }
+  };
+
+  return {
+    projectGraph,
+    health,
+    loading,
+    captureIntent,
+    analyzeImpact,
+    scanCodebase,
+    initializeGraph
+  };
+}
+```
+
+### **7. Integration into Main App** (`/server/app.js` - Add this)
+```javascript
+// Add with your other routes
+const intentSystemRoutes = require('./routes/intentSystem');
+app.use('/api/intent-system', intentSystemRoutes);
+```
+
+And update your existing swarm agent initialization to use the intent-aware version.
+
+## 🚀 **Deployment Steps**
+
+1. **Run the SQL migration** to add new tables
+2. **Copy all the new files** to your server and client
+3. **Update your swarm agent initialization** to use `IntentAwareArchitectAgent`
+4. **Add the new API routes** to your Express server
+5. **Initialize the project graph** for existing rooms
+
+## 🎯 **What You Get After Phase 1**
+
+✅ **Real-time dependency tracking** across your codebase  
+✅ **Intent capture** for every user action  
+✅ **Impact prediction** before changes are made  
+✅ **Project health metrics**  
+✅ **Enhanced AI prompts** with architectural context  
+
+**Ready for Phase 2?** This foundation will let us build the Self-Healing engine on top!
