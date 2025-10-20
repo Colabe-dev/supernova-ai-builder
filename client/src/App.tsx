@@ -7,6 +7,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/contexts/theme-context";
 import { ThemeToggle } from "@/components/theme-toggle";
+import AppShell from "@/components/AppShell";
 import "@/ui/tokens.css";
 import "./bootstrapTokens";
 import Landing from "@/pages/landing";
@@ -41,9 +42,10 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={Landing} />
-      <Route path="/dashboard">
+    <AppShell>
+      <Switch>
+        <Route path="/" component={Landing} />
+        <Route path="/dashboard">
         {() => (
           <DashboardLayout>
             <Dashboard />
@@ -113,8 +115,9 @@ function Router() {
           </DashboardLayout>
         )}
       </Route>
-      <Route component={NotFound} />
-    </Switch>
+        <Route component={NotFound} />
+      </Switch>
+    </AppShell>
   );
 }
 

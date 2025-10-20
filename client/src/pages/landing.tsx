@@ -2,8 +2,8 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, Zap, Brain, CheckCircle, Code2, Smartphone, Rocket } from "lucide-react";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { Zap, Brain, CheckCircle, Code2, Smartphone, Rocket, Sparkles } from "lucide-react";
+import { SharedHeader } from "@/components/shared-header";
 
 export default function Landing() {
   const features = [
@@ -48,24 +48,7 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-50 w-full backdrop-blur-md bg-black/30" style={{ borderBottom: '1px solid rgba(0, 255, 255, 0.2)' }}>
-        <div className="container flex h-14 items-center justify-between px-6">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg neon-text-cyan">
-              <Sparkles className="h-5 w-5" />
-            </div>
-            <span className="text-lg font-semibold gradient-text">Supernova</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <Link href="/dashboard">
-              <Button data-testid="button-get-started" className="neon-text-cyan font-semibold">
-                Get Started
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <SharedHeader />
 
       <main>
         <section className="container px-6 py-16 md:py-24">
@@ -76,7 +59,7 @@ export default function Landing() {
               </Badge>
               <h1 className="text-5xl md:text-6xl font-bold tracking-tight">
                 Build Apps with
-                <span className="gradient-text neon-pulse block mt-2" style={{ fontSize: '1.1em' }}>
+                <span className="hero-title-gradient block mt-2" style={{ fontSize: '1.1em' }}>
                   AI-Powered Agents
                 </span>
               </h1>

@@ -55,9 +55,9 @@
   --easing: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* Animated Grid Background */
+/* Animated Grid Background - disabled, using theme.css global background instead */
 html, body {
-  background: var(--color-bg);
+  /* background handled by theme.css */
   color: var(--color-text);
   font-family: var(--font-family);
   line-height: var(--line-height);
@@ -65,68 +65,27 @@ html, body {
   overflow-x: hidden;
 }
 
-body::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: -1;
-  background-image: 
-    linear-gradient(rgba(0, 255, 255, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 255, 255, 0.1) 1px, transparent 1px),
-    linear-gradient(rgba(255, 0, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 0, 255, 0.05) 1px, transparent 1px);
-  background-size: 
-    50px 50px,
-    50px 50px,
-    10px 10px,
-    10px 10px;
-  background-position: 
-    -1px -1px,
-    -1px -1px,
-    -1px -1px,
-    -1px -1px;
-  animation: gridScroll 20s linear infinite;
-}
+/* Grid animation disabled - using static brighter raster from theme.css */
 
-@keyframes gridScroll {
-  0% {
-    background-position: 
-      0 0,
-      0 0,
-      0 0,
-      0 0;
-  }
-  100% {
-    background-position: 
-      50px 50px,
-      50px 50px,
-      10px 10px,
-      10px 10px;
-  }
-}
-
-/* Neon Text Utilities */
+/* Neon Text Utilities - toned down, glow removed by theme.css */
 .neon-text-cyan {
   color: var(--color-neon-cyan);
-  text-shadow: var(--shadow-neon-cyan);
+  /* text-shadow removed - see theme.css for opt-in glow */
 }
 
 .neon-text-pink {
   color: var(--color-neon-pink);
-  text-shadow: var(--shadow-neon-pink);
+  /* text-shadow removed - see theme.css for opt-in glow */
 }
 
 .neon-text-yellow {
   color: var(--color-neon-yellow);
-  text-shadow: var(--shadow-neon-yellow);
+  /* text-shadow removed - see theme.css for opt-in glow */
 }
 
 .neon-text-green {
   color: var(--color-neon-green);
-  text-shadow: var(--shadow-neon-green);
+  /* text-shadow removed - see theme.css for opt-in glow */
 }
 
 /* Gradient Text */

@@ -1,0 +1,98 @@
+/* Global Theme - Supernova Neon Design System */
+:root {
+  /* Brand gradient colors - synced with header */
+  --brand-1: #7c3aed;
+  --brand-2: #22d3ee;
+  
+  /* Brighter raster grid configuration */
+  --raster-line: rgba(255, 255, 255, 0.08);   /* brightened from 0.04 */
+  --raster-dot: rgba(255, 255, 255, 0.10);
+  --raster-cell: 22px;                         /* tighter grid */
+}
+
+/* Global background with brighter raster */
+html, 
+body, 
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  color: var(--color-text);
+  background:
+    /* Subtle radial glow at top */
+    radial-gradient(1000px 600px at 40% 20%, rgba(255, 255, 255, 0.06), transparent 60%),
+    /* Bottom fade */
+    linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.25) 85%),
+    /* Brighter raster grid lines */
+    linear-gradient(var(--raster-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--raster-line) 1px, transparent 1px),
+    /* Base dark background */
+    var(--color-bg);
+  background-size:
+    100% 100%,
+    100% 100%,
+    100% var(--raster-cell),
+    var(--raster-cell) 100%,
+    cover;
+  background-position: 0 0, 0 0, 0 0, 0 0, center;
+  background-attachment: fixed;
+}
+
+/* Gradient title WITHOUT neon glow - uses header brand colors */
+.hero-title-gradient {
+  background: linear-gradient(90deg, var(--brand-1), var(--brand-2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: none;           /* remove glow */
+  text-shadow: none;      /* remove neon */
+}
+
+/* Softer gradient text for general use */
+.gradient-text-soft {
+  background: linear-gradient(135deg, var(--brand-1) 0%, var(--brand-2) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: none;
+}
+
+/* Keep existing neon utilities but make them opt-in */
+.neon-glow-cyan {
+  text-shadow: 
+    0 0 10px var(--color-neon-cyan),
+    0 0 20px var(--color-neon-cyan),
+    0 0 30px var(--color-neon-cyan);
+}
+
+.neon-glow-pink {
+  text-shadow: 
+    0 0 10px var(--color-neon-pink),
+    0 0 20px var(--color-neon-pink),
+    0 0 30px var(--color-neon-pink);
+}
+
+/* Override strong neon text styles with softer versions */
+.neon-text-cyan {
+  color: var(--color-neon-cyan);
+  text-shadow: none; /* Remove default glow */
+}
+
+.neon-text-pink {
+  color: var(--color-neon-pink);
+  text-shadow: none; /* Remove default glow */
+}
+
+.neon-text-yellow {
+  color: var(--color-neon-yellow);
+  text-shadow: none; /* Remove default glow */
+}
+
+.neon-text-green {
+  color: var(--color-neon-green);
+  text-shadow: none; /* Remove default glow */
+}

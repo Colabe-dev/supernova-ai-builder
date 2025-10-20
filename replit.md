@@ -5,16 +5,18 @@ Supernova is an intelligent application builder platform that uses AI-powered ag
 
 ## User Preferences
 - **Visual Priority**: Frontend quality is paramount - exceptional attention to spacing, typography, colors, and interactions
-- **Design System**: Collab Creative Studio - Neon aesthetic with vibrant colors and glow effects
+- **Design System**: Collab Creative Studio - Refined neon aesthetic with balanced visual effects
 - **Color Scheme**: Dark background (#0a0a0f) with neon cyan, pink, yellow, and green accents
-- **Visual Effects**: Animated grid backgrounds, neon glow shadows, gradient text, glassmorphic cards
+- **Visual Effects**: Brighter static raster grid background (rgba 0.08-0.10), toned-down neon glow effects, gradient text using header brand colors (#7c3aed to #22d3ee)
 - **Fonts**: Inter for UI, JetBrains Mono for code
-- **Components**: Custom neon-styled cards and buttons with colorful typography
+- **Components**: Custom neon-styled cards and buttons with colorful typography, unified SharedHeader component
 
 ## System Architecture
 
 ### Frontend
 The frontend is built with React, Wouter for routing, TanStack Query for data fetching, and Shadcn UI components. It features a modular structure including pages for landing, dashboard, project details, a dev console, diff viewer, and approvals workflow. A custom brand system manages runtime design tokens via CSS variables and SSE for live updates, supporting layout primitives like Container, Stack, Grid, Card, and Button. The visual identity is "Collab Creative Studio Neon Design."
+
+**Global Layout System**: AppShell wrapper component loads design tokens and applies global theme styles. SharedHeader component provides consistent navigation across all pages with brand gradient logo (#7c3aed to #22d3ee). Global theme.css implements brighter static raster grid background (tighter 22px cells, rgba 0.08-0.10 opacity) with toned-down neon effects - glow shadows are now opt-in via specific classes rather than default. The "AI-Powered Agents" hero title uses `.hero-title-gradient` class for clean gradient text without neon glow, matching header brand colors.
 
 ### Backend
 The backend, built with Express, handles core API endpoints for projects, templates, agents, approvals, in-app purchases, and entitlements. It includes a dev-routes module for file system access, terminal execution, and design token management. The IAP routes provide production-ready verification for Google Play and Apple App Store, with automatic entitlement grant fulfillment to Postgres. The entitlements system uses **Postgres** (Replit-hosted Neon) for persistent storage with transactional integrity, tracking coins, subscriptions, and purchase history. Idempotency is enforced via unique external_ref constraints.
