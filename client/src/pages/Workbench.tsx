@@ -56,7 +56,7 @@ export default function Workbench() {
 
       {/* Workspace Tabs Pane (fills remaining space) */}
       <div className="pane" style={{ flex: 1 }} data-testid="pane-workspace">
-        <WorkspaceTabs />
+        <WorkspaceTabs roomId={selectedRoomId} />
       </div>
     </div>
   );

@@ -2,14 +2,19 @@ import { useState } from 'react';
 import DevConsole from '../pages/dev-console';
 import DiffPage from '../pages/diff';
 import Usage from '../pages/usage';
+import Receipts from '../pages/Receipts';
 
-export default function WorkspaceTabs() {
+interface WorkspaceTabsProps {
+  roomId?: string | null;
+}
+
+export default function WorkspaceTabs({ roomId }: WorkspaceTabsProps) {
   const [tab, setTab] = useState('project');
 
   return (
     <div className="workspace-tabs">
       <div className="tabbar">
-        {['project', 'diffs', 'preview', 'usage', 'settings'].map(t => (
+        {['project', 'diffs', 'preview', 'receipts', 'usage', 'settings'].map(t => (
           <div 
             key={t} 
             className={'tab ' + (tab === t ? 'active' : '')} 
@@ -20,10 +25,11 @@ export default function WorkspaceTabs() {
           </div>
         ))}
       </div>
-      <div className={'content ' + (tab === 'usage' || tab === 'settings' ? 'scroll' : '')}>
+      <div className={'content ' + (tab === 'receipts' || tab === 'usage' || tab === 'settings' ? 'scroll' : '')}>
         {tab === 'project' && <DevConsole />}
         {tab === 'diffs' && <DiffPage />}
         {tab === 'preview' && <iframe className="full" title="Preview" src="/" />}
+        {tab === 'receipts' && <Receipts roomId={roomId || null} />}
         {tab === 'usage' && <Usage />}
         {tab === 'settings' && (
           <div style={{ padding: 16, display: 'grid', gap: 8 }}>

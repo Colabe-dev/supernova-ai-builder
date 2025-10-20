@@ -1,7 +1,13 @@
-import express from 'express';
-import { pool } from '../db.js';
+import { Router } from 'express';
+import pg from 'pg';
 
-const router = express.Router();
+const { Pool } = pg;
+const router = Router();
+
+// Native Postgres pool for database operations
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 /**
  * GET /api/receipts?roomId=:roomId - List receipts for a room

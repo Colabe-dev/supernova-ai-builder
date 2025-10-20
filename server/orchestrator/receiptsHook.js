@@ -1,4 +1,11 @@
-import { pool } from '../db.js';
+import pg from 'pg';
+
+const { Pool } = pg;
+
+// Native Postgres pool for database operations
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 /**
  * Log a receipt for an AI action with inputs/outputs for replay
