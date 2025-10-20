@@ -1,0 +1,209 @@
+Here’s a single, copy-paste **builder prompt** to propagate the layout across **all pages**, reduce the neon on “AI-Powered Agents,” reuse the **Supernova header colors**, and **brighten the raster** background globally.
+
+---
+
+# 🧠 PROMPT — “Supernova Global Layout Unifier”
+
+You are the **UI Refactor Agent** inside the Supernova repo (Vite+React). Apply a **global layout** and theme so every route shares the same header, background raster, and typography. Keep changes **atomic**, generate diffs, and run a build at the end.
+
+## Goals
+
+1. **Global wrapper** used by **all pages** (not just Landing).
+2. **Title style:** “AI-Powered Agents” uses **header brand colors** (no neon glow).
+3. **Raster background** is slightly brighter and **visible across all pages**.
+4. Keep tokens configurable via `server/design.tokens.json`.
+
+## Files to touch
+
+* `client/src/main.jsx` (wrap routes in AppShell)
+* `client/src/pages/App.jsx` (remove page-local header if duplicated)
+* `client/src/styles/theme.css` (new)
+* `client/src/components/AppShell.jsx` (new)
+* `client/src/components/Header.jsx` (extract if not already separated)
+* Any page that hardcodes the old neon text styles.
+
+## Theme tokens (read & map)
+
+* Read `/api/design/tokens` on load and map to CSS vars:
+
+  * `--bg` ← `theme.bg`
+  * `--text` ← `theme.text`
+  * `--brand-1`, `--brand-2` ← use the **same two colors** the Supernova header already uses. If unavailable, fall back to `#7c3aed` and `#22d3ee`.
+  * Keep `--primary` from tokens.
+
+## Implement
+
+1. **Create `client/src/styles/theme.css`** with global variables and **brighter raster**:
+
+```css
+:root {
+  --bg: #0b1f3a;
+  --text: #ffffff;
+  --primary: #fec72e;
+  /* brand gradient: take from header colors; fallback provided */
+  --brand-1: #7c3aed; /* fallback */
+  --brand-2: #22d3ee; /* fallback */
+
+  /* raster intensity */
+  --raster-line: rgba(255,255,255,0.08);   /* was ~0.04, brighten */
+  --raster-dot: rgba(255,255,255,0.10);
+  --raster-cell: 22px;                     /* a bit tighter */
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  color: var(--text);
+  background:
+    radial-gradient(1000px 600px at 40% 20%, rgba(255,255,255,0.06), transparent 60%),
+    linear-gradient(to bottom, transparent, rgba(0,0,0,0.25) 85%),
+    /* raster grid */
+    linear-gradient(var(--raster-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--raster-line) 1px, transparent 1px),
+    /* base */
+    var(--bg);
+  background-size:
+    100% 100%,
+    100% 100%,
+    100% var(--raster-cell),
+    var(--raster-cell) 100%,
+    cover;
+  background-position: 0 0, 0 0, 0 0, 0 0, center;
+}
+
+/* Gradient title without neon */
+.hero-title-gradient {
+  background: linear-gradient(90deg, var(--brand-1), var(--brand-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: none;             /* remove glow */
+  text-shadow: none;        /* remove neon */
+}
+```
+
+2. **Create `client/src/components/AppShell.jsx`** (wraps header + global CSS load):
+
+```jsx
+import React, { useEffect } from 'react'
+import '../styles/theme.css'
+
+export default function AppShell({ children }) {
+  useEffect(() => {
+    // Sync tokens → CSS vars
+    fetch('/api/design/tokens').then(r=>r.json()).then(t => {
+      const theme = t?.theme || {}
+      const root = document.documentElement
+      if (theme.bg) root.style.setProperty('--bg', theme.bg)
+      if (theme.text) root.style.setProperty('--text', theme.text)
+      if (theme.primary) root.style.setProperty('--primary', theme.primary)
+      // If header already defines a gradient, read from there (optional future hook).
+      // Else keep brand-1 / brand-2 defaults; UI header component may update them.
+    })
+  }, [])
+  return <div className="app-shell">{children}</div>
+}
+```
+
+3. **Extract/ensure a shared header** `client/src/components/Header.jsx` that already shows the Supernova brand gradient. Also **set the brand gradient variables** here (so titles across pages match the header colors):
+
+```jsx
+import React, { useEffect } from 'react'
+
+export default function Header() {
+  useEffect(() => {
+    // If the header uses a gradient button/logo, set CSS vars to match:
+    const root = document.documentElement
+    // Replace these with the actual header colors you use today:
+    root.style.setProperty('--brand-1', getComputedStyle(root).getPropertyValue('--brand-1') || '#7c3aed')
+    root.style.setProperty('--brand-2', getComputedStyle(root).getPropertyValue('--brand-2') || '#22d3ee')
+  }, [])
+  return (
+    <header style={{padding:'12px 16px', display:'flex', justifyContent:'space-between', alignItems:'center', background:'rgba(255,255,255,0.06)', backdropFilter:'blur(4px)'}}>
+      <a href="/" style={{display:'flex', gap:8, alignItems:'center', textDecoration:'none', color:'var(--text)'}}>
+        <span style={{width:18, height:18, borderRadius:4, background:'linear-gradient(90deg, var(--brand-1), var(--brand-2))'}} />
+        <strong>Supernova</strong>
+      </a>
+      <nav style={{display:'flex', gap:12}}>
+        <a href="/dev">Dev</a>
+        <a href="/diff">Diffs</a>
+        <a href="/chat">Chat</a>
+        <a href="/settings/supabase">Supabase</a>
+      </nav>
+    </header>
+  )
+}
+```
+
+4. **Wrap all routes** with `AppShell` + `Header` in `client/src/main.jsx`:
+
+```diff
+ import React from 'react'
+ import { createRoot } from 'react-dom/client'
+ import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+ import App from './pages/App.jsx'
+ import Dev from './pages/Dev.jsx'
+ import Diff from './pages/Diff.jsx'
++import AppShell from './components/AppShell.jsx'
++import Header from './components/Header.jsx'
++// (Chat / Settings routes remain)
+
+ const router = createBrowserRouter([
+-  { path: '/', element: <App/> },
+-  { path: '/dev', element: <Dev/> },
+-  { path: '/diff', element: <Diff/> },
++  { path: '/', element:
++    <AppShell>
++      <Header />
++      <App />
++    </AppShell>
++  },
++  { path: '/dev', element:
++    <AppShell>
++      <Header />
++      <Dev />
++    </AppShell>
++  },
++  { path: '/diff', element:
++    <AppShell>
++      <Header />
++      <Diff />
++    </AppShell>
++  },
+   // repeat for /chat, /settings/*
+ ])
+```
+
+5. **Tone down the neon** on the hero title wherever it appears. Replace old neon class with `.hero-title-gradient`. Example for landing:
+
+```diff
+- <h1 className="hero neon">Build Apps with <span className="neon">AI-Powered Agents</span></h1>
++ <h1 className="hero">Build Apps with <span className="hero-title-gradient">AI-Powered Agents</span></h1>
+```
+
+Remove any `text-shadow`, `filter: blur()`, or glow utilities from that span.
+
+6. **Make raster background visible across all pages**
+   Ensure no page overrides `body`/`#root` background. Delete page-level dark overlays exceeding `rgba(..., 0.4)`, and keep the global CSS above. If a page adds its own backdrop, cap opacity at `0.25`.
+
+## Acceptance criteria
+
+* All routes render with the **same header**, **same raster**, and **same spacing**.
+* “AI-Powered Agents” shows **brand gradient text** (no neon glow) on **every page**.
+* Raster is visibly brighter vs. previous (grid lines alpha ≈ 0.08–0.10, cell 22px).
+* No page defines its own body background (single source of truth).
+* Lighthouse contrast ≥ 4.5 on standard text.
+
+## Commands to run
+
+1. Save patches → `npm run dev` in client and server.
+2. Build check: `npm run build` (client) and load preview.
+3. If any ESLint or build errors appear, auto-fix and re-run.
+
+## Rollback plan
+
+If visual regressions appear, switch `--raster-line` back to `rgba(255,255,255,0.04)` and `--raster-cell` to `24px`, and restore `.hero-title-gradient` to solid `--text`.
+
+---
+
+If you’d rather I ship an **overlay ZIP** that drops in `AppShell.jsx`, `Header.jsx`, and `theme.css` plus the route wrapping diffs, say **“ship layout patch”** and I’ll deliver a ready-to-apply bundle.
