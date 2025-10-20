@@ -83,10 +83,14 @@ secrets:
   SENTRY_DSN: "<https://key@sentry.io/project>"             # or "" to disable
   
   # In-App Purchases (required for mobile)
-  GOOGLE_SERVICE_ACCOUNT_KEY: '<{"type":"service_account","project_id":"..."}>'
+  # SECURITY: Do not hardcode credentials here. Instead, create a Kubernetes secret:
+  #   kubectl create secret generic google-iap-credentials \
+  #     --from-file=service-account.json=./path/to/your-service-account.json
+  # Then reference it in your deployment using existingSecret configuration
+  GOOGLE_SERVICE_ACCOUNT_KEY: ""  # Leave empty - use existingSecret instead
   GOOGLE_PACKAGE_NAME: "com.collab.supernova"
   APPLE_BUNDLE_ID: "com.collab.supernova"
-  APPLE_SHARED_SECRET: "<APP_STORE_SHARED_SECRET>"
+  APPLE_SHARED_SECRET: ""  # Leave empty - use existingSecret instead
 
 # =============================================================================
 # OPTIONAL: Resource Limits
