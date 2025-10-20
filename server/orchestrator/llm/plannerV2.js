@@ -38,15 +38,16 @@ CRITICAL RULES:
 /**
  * Plan a task using LLM
  * @param {string} userText - User's request
+ * @param {Object} overrides - Override LLM config (model, temperature, etc.)
  * @returns {Promise<{question?, choices?, test?, actions[]}>}
  */
-export async function plannerV2(userText) {
+export async function plannerV2(userText, overrides = {}) {
   const messages = [
     { role: 'system', content: SYSTEM_PROMPT },
     { role: 'user', content: userText || '' }
   ];
 
-  const { parsed } = await callLLM(messages, { schemaJSON: true });
+  const { parsed } = await callLLM(messages, { schemaJSON: true }, overrides);
 
   // Validate and return parsed response
   if (parsed && Array.isArray(parsed.actions)) {

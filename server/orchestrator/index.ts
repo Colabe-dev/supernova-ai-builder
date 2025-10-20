@@ -42,8 +42,9 @@ export async function orchestrate({ msg, sessionId, send }: OrchestrateParams) {
     // 1) Plan + (optional) quick-choices
     // Use LLM v2 if enabled globally or per-session
     const useLLM = process.env.LLM_PLANNER_V2 === 'true' || s.llm;
+    const llmOverrides = s.model ? { model: s.model } : {};
     const plan = useLLM
-      ? await plannerV2(msg.text).catch((err: any) => {
+      ? await plannerV2(msg.text, llmOverrides).catch((err: any) => {
           console.error('[LLM Planner v2] Error:', err.message);
           send({ type: 'agent_message', agent: 'System', text: 'LLM unavailable, using fallback planner' });
           return planner(msg.text);
@@ -100,8 +101,9 @@ export async function orchestrate({ msg, sessionId, send }: OrchestrateParams) {
 
       if (!t.ok) {
         const useLLM = process.env.LLM_PLANNER_V2 === 'true' || s.llm;
+        const llmOverrides = s.model ? { model: s.model } : {};
         const explain = useLLM
-          ? await explainerV2({ stdout: t.stdout, stderr: t.stderr }).catch((err: any) => {
+          ? await explainerV2({ stdout: t.stdout, stderr: t.stderr }, llmOverrides).catch((err: any) => {
               console.error('[LLM Explainer v2] Error:', err.message);
               return explainer({ stdout: t.stdout, stderr: t.stderr });
             })
@@ -113,7 +115,7 @@ export async function orchestrate({ msg, sessionId, send }: OrchestrateParams) {
         });
 
         const fix = useLLM
-          ? await fixerV2({ stdout: t.stdout, stderr: t.stderr }).catch((err: any) => {
+          ? await fixerV2({ stdout: t.stdout, stderr: t.stderr }, llmOverrides).catch((err: any) => {
               console.error('[LLM Fixer v2] Error:', err.message);
               return fixer({ stdout: t.stdout, stderr: t.stderr });
             })

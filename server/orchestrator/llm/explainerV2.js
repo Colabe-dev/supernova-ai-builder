@@ -25,9 +25,10 @@ Guidelines:
 /**
  * Explain errors and suggest fixes
  * @param {{stdout: string, stderr: string}} params
+ * @param {Object} overrides - Override LLM config (model, temperature, etc.)
  * @returns {Promise<{text: string, steps: string[]}>}
  */
-export async function explainerV2({ stdout, stderr }) {
+export async function explainerV2({ stdout, stderr }, overrides = {}) {
   const errorOutput = (stderr || '') + '\n' + (stdout || '');
   
   // Limit context to last 6000 chars to avoid token limits
@@ -38,7 +39,7 @@ export async function explainerV2({ stdout, stderr }) {
     { role: 'user', content: context }
   ];
 
-  const { parsed } = await callLLM(messages, { schemaJSON: true });
+  const { parsed } = await callLLM(messages, { schemaJSON: true }, overrides);
 
   if (parsed?.steps?.length) {
     return {

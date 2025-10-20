@@ -29,9 +29,10 @@ CRITICAL RULES:
 /**
  * Generate automated fix actions
  * @param {{stdout: string, stderr: string}} params
+ * @param {Object} overrides - Override LLM config (model, temperature, etc.)
  * @returns {Promise<{actions: Array}>}
  */
-export async function fixerV2({ stdout, stderr }) {
+export async function fixerV2({ stdout, stderr }, overrides = {}) {
   const errorOutput = (stderr || '') + '\n' + (stdout || '');
   
   // Limit context to last 6000 chars
@@ -42,7 +43,7 @@ export async function fixerV2({ stdout, stderr }) {
     { role: 'user', content: context }
   ];
 
-  const { parsed } = await callLLM(messages, { schemaJSON: true });
+  const { parsed } = await callLLM(messages, { schemaJSON: true }, overrides);
 
   if (parsed?.actions && Array.isArray(parsed.actions)) {
     return parsed;
