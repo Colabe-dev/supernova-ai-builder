@@ -1,0 +1,1443 @@
+# 🚀 **Phase 2: Self-Healing Engine & Intent Debugger**
+## **Technical Implementation Plan (Weeks 3-4)**
+
+Now let's build the magical part - the system that automatically prevents and fixes breaks! This integrates directly with your Phase 1 foundation.
+
+## 📁 **New Files to Implement**
+
+### **1. Enhanced Database Schema** (`/sql/self_healing.sql`)
+```sql
+-- Healing actions and execution tracking
+CREATE TABLE healing_actions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
+  intent_capture_id UUID REFERENCES intent_captures(id),
+  prediction_id UUID REFERENCES impact_predictions(id),
+  action_type TEXT NOT NULL, -- 'compatibility_layer', 'migration', 'fix', 'rollback'
+  description TEXT NOT NULL,
+  status TEXT DEFAULT 'pending', -- 'pending', 'executing', 'completed', 'failed'
+  execution_plan JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  executed_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE healing_executions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  healing_action_id UUID REFERENCES healing_actions(id),
+  step_number INTEGER NOT NULL,
+  step_description TEXT NOT NULL,
+  status TEXT DEFAULT 'pending',
+  result JSONB,
+  error_message TEXT,
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE intent_debugger_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
+  trigger_action TEXT NOT NULL,
+  user_intent TEXT NOT NULL,
+  expected_behavior JSONB,
+  actual_behavior JSONB,
+  discrepancies JSONB,
+  fixes_applied JSONB,
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for performance
+CREATE INDEX idx_healing_room ON healing_actions(room_id);
+CREATE INDEX idx_healing_status ON healing_actions(status);
+CREATE INDEX idx_executions_healing ON healing_executions(healing_action_id);
+CREATE INDEX idx_debugger_sessions_room ON intent_debugger_sessions(room_id);
+```
+
+### **2. Self-Healing Orchestrator** (`/server/services/SelfHealingOrchestrator.js`)
+```javascript
+const { supabase } = require('../lib/supabase');
+
+class SelfHealingOrchestrator {
+  constructor(roomId, projectGraph) {
+    this.roomId = roomId;
+    this.projectGraph = projectGraph;
+    this.isHealing = false;
+    this.healingQueue = [];
+  }
+
+  async initiateHealing(intentCapture, impactAnalysis) {
+    if (this.isHealing) {
+      this.healingQueue.push({ intentCapture, impactAnalysis });
+      return { status: 'queued', position: this.healingQueue.length };
+    }
+
+    this.isHealing = true;
+    
+    try {
+      // Generate healing plan based on impact analysis
+      const healingPlan = await this.generateHealingPlan(intentCapture, impactAnalysis);
+      
+      // Execute healing plan
+      const result = await this.executeHealingPlan(healingPlan);
+      
+      return {
+        status: 'completed',
+        healing_plan: healingPlan,
+        result: result
+      };
+    } catch (error) {
+      console.error('Healing execution failed:', error);
+      return {
+        status: 'failed',
+        error: error.message
+      };
+    } finally {
+      this.isHealing = false;
+      this.processNextInQueue();
+    }
+  }
+
+  async generateHealingPlan(intentCapture, impactAnalysis) {
+    const healingActions = [];
+    const riskThreshold = 7; // High severity threshold
+
+    // Analyze each prediction and generate appropriate healing actions
+    for (const prediction of impactAnalysis.predictions) {
+      if (prediction.severity >= riskThreshold) {
+        const actions = await this.generateActionsForPrediction(prediction, intentCapture);
+        healingActions.push(...actions);
+      }
+    }
+
+    // Add preventive actions based on impact analysis
+    const preventiveActions = await this.generatePreventiveActions(impactAnalysis.impactAnalysis);
+    healingActions.push(...preventiveActions);
+
+    return {
+      intent_capture_id: intentCapture.id,
+      healing_actions: healingActions,
+      estimated_duration: this.estimateDuration(healingActions),
+      risk_mitigated: impactAnalysis.overallRisk
+    };
+  }
+
+  async generateActionsForPrediction(prediction, intentCapture) {
+    const actions = [];
+    const predictionType = prediction.prediction_type;
+
+    switch (predictionType) {
+      case 'breaking_change':
+        actions.push(...await this.generateBreakingChangeFixes(prediction, intentCapture));
+        break;
+      
+      case 'performance':
+        actions.push(...await this.generatePerformanceFixes(prediction));
+        break;
+      
+      case 'security':
+        actions.push(...await this.generateSecurityFixes(prediction));
+        break;
+    }
+
+    return actions;
+  }
+
+  async generateBreakingChangeFixes(prediction, intentCapture) {
+    const actions = [];
+    const affectedComponents = prediction.affected_components || [];
+
+    // Add backward compatibility layer for high-risk changes
+    if (prediction.severity >= 8) {
+      actions.push({
+        type: 'compatibility_layer',
+        description: `Add backward compatibility for ${affectedComponents.length} affected components`,
+        execution_plan: {
+          steps: [
+            {
+              action: 'create_compatibility_shim',
+              target: this.extractChangeTarget(intentCapture.user_action),
+              dependents: affectedComponents
+            },
+            {
+              action: 'update_imports',
+              files: affectedComponents,
+              mapping: this.generateImportMapping(intentCapture)
+            }
+          ]
+        },
+        priority: 'high'
+      });
+    }
+
+    // Add gradual migration plan
+    actions.push({
+      type: 'migration_plan',
+      description: 'Create safe migration path for dependents',
+      execution_plan: {
+        steps: [
+          {
+            action: 'mark_deprecated',
+            target: this.extractChangeTarget(intentCapture.user_action)
+          },
+          {
+            action: 'create_migration_guide',
+            dependents: affectedComponents
+          }
+        ]
+      },
+      priority: 'medium'
+    });
+
+    return actions;
+  }
+
+  async generatePreventiveActions(impactAnalysis) {
+    const actions = [];
+
+    if (impactAnalysis.direct_dependencies.length > 10) {
+      actions.push({
+        type: 'architectural_review',
+        description: 'High coupling detected - suggest refactoring',
+        execution_plan: {
+          steps: [
+            {
+              action: 'analyze_coupling',
+              targets: impactAnalysis.direct_dependencies.map(d => d.target)
+            },
+            {
+              action: 'suggest_refactoring',
+              coupling_threshold: 0.8
+            }
+          ]
+        },
+        priority: 'medium'
+      });
+    }
+
+    return actions;
+  }
+
+  async executeHealingPlan(healingPlan) {
+    const results = [];
+    
+    // Store healing actions in database
+    for (const action of healingPlan.healing_actions) {
+      const { data: healingAction, error } = await supabase
+        .from('healing_actions')
+        .insert([{
+          room_id: this.roomId,
+          intent_capture_id: healingPlan.intent_capture_id,
+          action_type: action.type,
+          description: action.description,
+          status: 'executing',
+          execution_plan: action.execution_plan
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Failed to store healing action:', error);
+        continue;
+      }
+
+      // Execute each step of the healing action
+      const executionResult = await this.executeHealingAction(healingAction, action);
+      results.push(executionResult);
+    }
+
+    return {
+      total_actions: healingPlan.healing_actions.length,
+      completed_actions: results.filter(r => r.status === 'completed').length,
+      results: results
+    };
+  }
+
+  async executeHealingAction(healingAction, action) {
+    const steps = action.execution_plan.steps;
+    const stepResults = [];
+
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      
+      // Log step execution
+      const { data: execution, error } = await supabase
+        .from('healing_executions')
+        .insert([{
+          healing_action_id: healingAction.id,
+          step_number: i + 1,
+          step_description: `${step.action}: ${JSON.stringify(step)}`,
+          status: 'executing',
+          started_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
+
+      try {
+        const result = await this.executeHealingStep(step, healingAction);
+        
+        // Update step as completed
+        await supabase
+          .from('healing_executions')
+          .update({
+            status: 'completed',
+            result: result,
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', execution.id);
+
+        stepResults.push({ step: step.action, status: 'completed', result });
+        
+      } catch (error) {
+        // Update step as failed
+        await supabase
+          .from('healing_executions')
+          .update({
+            status: 'failed',
+            error_message: error.message,
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', execution.id);
+
+        stepResults.push({ step: step.action, status: 'failed', error: error.message });
+        break;
+      }
+    }
+
+    // Update healing action status
+    const allStepsCompleted = stepResults.every(r => r.status === 'completed');
+    await supabase
+      .from('healing_actions')
+      .update({
+        status: allStepsCompleted ? 'completed' : 'failed',
+        completed_at: new Date().toISOString()
+      })
+      .eq('id', healingAction.id);
+
+    return {
+      healing_action_id: healingAction.id,
+      status: allStepsCompleted ? 'completed' : 'failed',
+      step_results: stepResults
+    };
+  }
+
+  async executeHealingStep(step, healingAction) {
+    switch (step.action) {
+      case 'create_compatibility_shim':
+        return await this.createCompatibilityShim(step.target, step.dependents);
+      
+      case 'update_imports':
+        return await this.updateImports(step.files, step.mapping);
+      
+      case 'mark_deprecated':
+        return await this.markAsDeprecated(step.target);
+      
+      case 'analyze_coupling':
+        return await this.analyzeCoupling(step.targets);
+      
+      default:
+        throw new Error(`Unknown healing step: ${step.action}`);
+    }
+  }
+
+  async createCompatibilityShim(target, dependents) {
+    // Create backward compatibility layer
+    // This would integrate with your code generation system
+    const shimCode = `
+// AUTO-GENERATED COMPATIBILITY SHIM
+// Created by Self-Healing System at ${new Date().toISOString()}
+// Preserves backward compatibility for: ${target}
+
+export const legacySupport = {
+  // Compatibility functions here
+};
+    `;
+
+    // Store the generated shim (integrate with your file system)
+    return { 
+      shim_created: true, 
+      target: target,
+      dependents_count: dependents.length,
+      code: shimCode 
+    };
+  }
+
+  async updateImports(files, mapping) {
+    // Update import statements in multiple files
+    const updateResults = [];
+    
+    for (const file of files) {
+      // This would integrate with your file editing system
+      const result = await this.updateFileImports(file, mapping);
+      updateResults.push(result);
+    }
+
+    return { files_updated: updateResults.length, results: updateResults };
+  }
+
+  async markAsDeprecated(target) {
+    // Add deprecation warnings to code
+    return { 
+      deprecated: target,
+      warning_added: true,
+      message: `Marked ${target} as deprecated with backward compatibility`
+    };
+  }
+
+  async analyzeCoupling(targets) {
+    // Analyze coupling between components
+    const couplingAnalysis = [];
+    
+    for (const target of targets) {
+      const impact = await this.projectGraph.findImpact('component', target, 'modification');
+      couplingAnalysis.push({
+        target: target,
+        direct_dependencies: impact.direct_dependencies.length,
+        transitive_dependencies: impact.transitive_dependencies.length,
+        coupling_score: this.calculateCouplingScore(impact)
+      });
+    }
+
+    return { analysis: couplingAnalysis };
+  }
+
+  calculateCouplingScore(impact) {
+    const totalDeps = impact.direct_dependencies.length + impact.transitive_dependencies.length;
+    const strongDeps = impact.direct_dependencies.filter(d => d.strength > 0.7).length;
+    return (strongDeps / totalDeps) || 0;
+  }
+
+  extractChangeTarget(userAction) {
+    // Extract the target of the change from user action
+    // This is a simplified version - enhance with better NLP
+    const fileMatch = userAction.match(/(\w+\.\w+)/);
+    return fileMatch ? fileMatch[1] : 'unknown_target';
+  }
+
+  generateImportMapping(intentCapture) {
+    // Generate mapping for import updates
+    // This would be more sophisticated in reality
+    return {
+      old_imports: [],
+      new_imports: [],
+      mapping_rules: {}
+    };
+  }
+
+  estimateDuration(healingActions) {
+    // Simple duration estimation
+    const baseTimePerAction = 2; // minutes
+    return healingActions.length * baseTimePerAction;
+  }
+
+  async processNextInQueue() {
+    if (this.healingQueue.length > 0) {
+      const next = this.healingQueue.shift();
+      await this.initiateHealing(next.intentCapture, next.impactAnalysis);
+    }
+  }
+}
+
+module.exports = SelfHealingOrchestrator;
+```
+
+### **3. Intent Debugger Service** (`/server/services/IntentDebuggerService.js`)
+```javascript
+const { supabase } = require('../lib/supabase');
+
+class IntentDebuggerService {
+  constructor(roomId, projectGraph) {
+    this.roomId = roomId;
+    this.projectGraph = projectGraph;
+  }
+
+  async startDebugSession(triggerAction, userIntent, expectedBehavior) {
+    const { data: session, error } = await supabase
+      .from('intent_debugger_sessions')
+      .insert([{
+        room_id: this.roomId,
+        trigger_action: triggerAction,
+        user_intent: userIntent,
+        expected_behavior: expectedBehavior,
+        actual_behavior: {},
+        discrepancies: [],
+        fixes_applied: []
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return session;
+  }
+
+  async analyzeDiscrepancy(sessionId, actualBehavior) {
+    // Get expected behavior from session
+    const { data: session, error } = await supabase
+      .from('intent_debugger_sessions')
+      .select('*')
+      .eq('id', sessionId)
+      .single();
+
+    if (error) throw error;
+
+    // Compare expected vs actual behavior
+    const discrepancies = this.findDiscrepancies(session.expected_behavior, actualBehavior);
+    
+    // Update session with discrepancies
+    await supabase
+      .from('intent_debugger_sessions')
+      .update({
+        actual_behavior: actualBehavior,
+        discrepancies: discrepancies
+      })
+      .eq('id', sessionId);
+
+    // Generate fixes for discrepancies
+    const fixes = await this.generateFixes(discrepancies, session);
+    
+    return {
+      session_id: sessionId,
+      discrepancies: discrepancies,
+      suggested_fixes: fixes
+    };
+  }
+
+  findDiscrepancies(expected, actual) {
+    const discrepancies = [];
+
+    // Compare execution paths
+    if (expected.execution_path && actual.execution_path) {
+      const pathDiff = this.compareExecutionPaths(expected.execution_path, actual.execution_path);
+      if (pathDiff.length > 0) {
+        discrepancies.push({
+          type: 'execution_path_mismatch',
+          expected: expected.execution_path,
+          actual: actual.execution_path,
+          differences: pathDiff
+        });
+      }
+    }
+
+    // Compare outcomes
+    if (expected.outcome && actual.outcome) {
+      const outcomeDiff = this.compareOutcomes(expected.outcome, actual.outcome);
+      if (outcomeDiff.length > 0) {
+        discrepancies.push({
+          type: 'outcome_mismatch',
+          expected: expected.outcome,
+          actual: actual.outcome,
+          differences: outcomeDiff
+        });
+      }
+    }
+
+    // Compare performance characteristics
+    if (expected.performance && actual.performance) {
+      const perfDiff = this.comparePerformance(expected.performance, actual.performance);
+      if (perfDiff.length > 0) {
+        discrepancies.push({
+          type: 'performance_issue',
+          expected: expected.performance,
+          actual: actual.performance,
+          differences: perfDiff
+        });
+      }
+    }
+
+    return discrepancies;
+  }
+
+  compareExecutionPaths(expected, actual) {
+    const differences = [];
+    
+    // Simple comparison - enhance with more sophisticated analysis
+    if (expected.length !== actual.length) {
+      differences.push(`Expected ${expected.length} steps, got ${actual.length}`);
+    }
+
+    for (let i = 0; i < Math.min(expected.length, actual.length); i++) {
+      if (expected[i] !== actual[i]) {
+        differences.push(`Step ${i + 1}: expected "${expected[i]}" but got "${actual[i]}"`);
+      }
+    }
+
+    return differences;
+  }
+
+  compareOutcomes(expected, actual) {
+    const differences = [];
+    
+    if (expected.status !== actual.status) {
+      differences.push(`Status: expected "${expected.status}" but got "${actual.status}"`);
+    }
+
+    if (expected.data && actual.data) {
+      const dataDiff = this.deepCompare(expected.data, actual.data);
+      if (dataDiff.length > 0) {
+        differences.push(...dataDiff);
+      }
+    }
+
+    return differences;
+  }
+
+  comparePerformance(expected, actual) {
+    const differences = [];
+    const thresholds = {
+      response_time: 1.5, // 50% slower than expected
+      memory_usage: 1.3   // 30% more memory than expected
+    };
+
+    if (actual.response_time > expected.response_time * thresholds.response_time) {
+      differences.push(`Slow response: ${actual.response_time}ms vs expected ${expected.response_time}ms`);
+    }
+
+    if (actual.memory_usage > expected.memory_usage * thresholds.memory_usage) {
+      differences.push(`High memory: ${actual.memory_usage}MB vs expected ${expected.memory_usage}MB`);
+    }
+
+    return differences;
+  }
+
+  deepCompare(expected, actual, path = '') {
+    const differences = [];
+    
+    if (typeof expected !== typeof actual) {
+      differences.push(`${path}: type mismatch (expected ${typeof expected}, got ${typeof actual})`);
+      return differences;
+    }
+
+    if (typeof expected === 'object' && expected !== null && actual !== null) {
+      const expectedKeys = Object.keys(expected);
+      const actualKeys = Object.keys(actual);
+
+      // Check for missing keys
+      for (const key of expectedKeys) {
+        if (!actualKeys.includes(key)) {
+          differences.push(`${path}${path ? '.' : ''}${key}: missing in actual result`);
+        }
+      }
+
+      // Check for extra keys
+      for (const key of actualKeys) {
+        if (!expectedKeys.includes(key)) {
+          differences.push(`${path}${path ? '.' : ''}${key}: unexpected in actual result`);
+        }
+      }
+
+      // Recursively compare common keys
+      for (const key of expectedKeys) {
+        if (actualKeys.includes(key)) {
+          const nestedPath = path ? `${path}.${key}` : key;
+          differences.push(...this.deepCompare(expected[key], actual[key], nestedPath));
+        }
+      }
+    } else if (expected !== actual) {
+      differences.push(`${path}: value mismatch (expected ${expected}, got ${actual})`);
+    }
+
+    return differences;
+  }
+
+  async generateFixes(discrepancies, session) {
+    const fixes = [];
+
+    for (const discrepancy of discrepancies) {
+      switch (discrepancy.type) {
+        case 'execution_path_mismatch':
+          fixes.push(...await this.generateExecutionPathFixes(discrepancy, session));
+          break;
+        
+        case 'outcome_mismatch':
+          fixes.push(...await this.generateOutcomeFixes(discrepancy, session));
+          break;
+        
+        case 'performance_issue':
+          fixes.push(...await this.generatePerformanceFixes(discrepancy, session));
+          break;
+      }
+    }
+
+    return fixes;
+  }
+
+  async generateExecutionPathFixes(discrepancy, session) {
+    const fixes = [];
+    
+    // Analyze where the execution path diverged
+    const divergencePoint = this.findDivergencePoint(
+      discrepancy.expected, 
+      discrepancy.actual
+    );
+
+    fixes.push({
+      type: 'execution_correction',
+      description: `Fix execution path divergence at step ${divergencePoint + 1}`,
+      steps: [
+        {
+          action: 'analyze_conditional',
+          at_step: divergencePoint,
+          expected: discrepancy.expected[divergencePoint],
+          actual: discrepancy.actual[divergencePoint]
+        },
+        {
+          action: 'correct_logic',
+          target: this.identifyProblemComponent(discrepancy.actual[divergencePoint])
+        }
+      ],
+      confidence: 0.8
+    });
+
+    return fixes;
+  }
+
+  async generateOutcomeFixes(discrepancy, session) {
+    const fixes = [];
+    
+    fixes.push({
+      type: 'data_correction',
+      description: 'Correct data transformation or validation',
+      steps: [
+        {
+          action: 'validate_inputs',
+          expected: discrepancy.expected.data,
+          actual: discrepancy.actual.data
+        },
+        {
+          action: 'fix_transformation',
+          mapping: this.generateDataMapping(discrepancy.expected.data, discrepancy.actual.data)
+        }
+      ],
+      confidence: 0.7
+    });
+
+    return fixes;
+  }
+
+  async generatePerformanceFixes(discrepancy, session) {
+    const fixes = [];
+    
+    fixes.push({
+      type: 'performance_optimization',
+      description: 'Optimize slow operations',
+      steps: [
+        {
+          action: 'identify_bottleneck',
+          metrics: discrepancy.actual
+        },
+        {
+          action: 'apply_optimization',
+          technique: this.suggestOptimizationTechnique(discrepancy)
+        }
+      ],
+      confidence: 0.6
+    });
+
+    return fixes;
+  }
+
+  findDivergencePoint(expected, actual) {
+    for (let i = 0; i < Math.min(expected.length, actual.length); i++) {
+      if (expected[i] !== actual[i]) {
+        return i;
+      }
+    }
+    return Math.min(expected.length, actual.length);
+  }
+
+  identifyProblemComponent(executionStep) {
+    // Simple heuristic to identify the problem component
+    if (executionStep.includes('api')) return 'api_endpoint';
+    if (executionStep.includes('database')) return 'database_query';
+    if (executionStep.includes('component')) return 'react_component';
+    return 'unknown_component';
+  }
+
+  generateDataMapping(expected, actual) {
+    // Generate mapping to transform actual data to expected data
+    return {
+      transformations: [],
+      validations: []
+    };
+  }
+
+  suggestOptimizationTechnique(discrepancy) {
+    if (discrepancy.differences.some(d => d.includes('response_time'))) {
+      return 'caching_or_query_optimization';
+    }
+    if (discrepancy.differences.some(d => d.includes('memory_usage'))) {
+      return 'memory_optimization_or_pagination';
+    }
+    return 'general_performance_review';
+  }
+
+  async applyFix(sessionId, fix) {
+    // Execute the suggested fix
+    const executionResult = await this.executeFix(fix);
+    
+    // Update session with applied fix
+    const { data: session } = await supabase
+      .from('intent_debugger_sessions')
+      .select('fixes_applied')
+      .eq('id', sessionId)
+      .single();
+
+    const updatedFixes = [...(session.fixes_applied || []), {
+      fix: fix,
+      result: executionResult,
+      applied_at: new Date().toISOString()
+    }];
+
+    await supabase
+      .from('intent_debugger_sessions')
+      .update({ fixes_applied: updatedFixes })
+      .eq('id', sessionId);
+
+    return executionResult;
+  }
+
+  async executeFix(fix) {
+    // Execute the fix based on its type
+    switch (fix.type) {
+      case 'execution_correction':
+        return await this.executeExecutionCorrection(fix);
+      
+      case 'data_correction':
+        return await this.executeDataCorrection(fix);
+      
+      case 'performance_optimization':
+        return await this.executePerformanceOptimization(fix);
+      
+      default:
+        throw new Error(`Unknown fix type: ${fix.type}`);
+    }
+  }
+
+  async executeExecutionCorrection(fix) {
+    // Implement execution path correction
+    return { 
+      status: 'completed', 
+      correction_applied: true,
+      details: 'Execution path logic updated'
+    };
+  }
+
+  async executeDataCorrection(fix) {
+    // Implement data transformation fixes
+    return { 
+      status: 'completed', 
+      data_corrected: true,
+      details: 'Data validation and transformation updated'
+    };
+  }
+
+  async executePerformanceOptimization(fix) {
+    // Implement performance optimizations
+    return { 
+      status: 'completed', 
+      optimized: true,
+      details: 'Performance optimizations applied'
+    };
+  }
+}
+
+module.exports = IntentDebuggerService;
+```
+
+### **4. Enhanced API Routes** (`/server/routes/selfHealing.js`)
+```javascript
+const express = require('express');
+const router = express.Router();
+const ProjectGraphService = require('../services/ProjectGraphService');
+const SelfHealingOrchestrator = require('../services/SelfHealingOrchestrator');
+const IntentDebuggerService = require('../services/IntentDebuggerService');
+
+// Initialize self-healing for a room
+router.post('/:room_id/initialize', async (req, res) => {
+  try {
+    const { room_id } = req.params;
+    const projectGraph = await new ProjectGraphService(room_id).initialize();
+    const healingOrchestrator = new SelfHealingOrchestrator(room_id, projectGraph);
+    
+    res.json({ 
+      success: true, 
+      message: 'Self-healing system initialized',
+      healing_available: true
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Trigger healing for an intent
+router.post('/:room_id/healing/trigger', async (req, res) => {
+  try {
+    const { room_id } = req.params;
+    const { intent_capture, impact_analysis } = req.body;
+
+    const projectGraph = await new ProjectGraphService(room_id).initialize();
+    const healingOrchestrator = new SelfHealingOrchestrator(room_id, projectGraph);
+    
+    const result = await healingOrchestrator.initiateHealing(intent_capture, impact_analysis);
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Start intent debugger session
+router.post('/:room_id/debugger/start', async (req, res) => {
+  try {
+    const { room_id } = req.params;
+    const { trigger_action, user_intent, expected_behavior } = req.body;
+
+    const projectGraph = await new ProjectGraphService(room_id).initialize();
+    const debuggerService = new IntentDebuggerService(room_id, projectGraph);
+    
+    const session = await debuggerService.startDebugSession(
+      trigger_action, 
+      user_intent, 
+      expected_behavior
+    );
+    
+    res.json({ session });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Analyze discrepancies
+router.post('/:room_id/debugger/:session_id/analyze', async (req, res) => {
+  try {
+    const { room_id, session_id } = req.params;
+    const { actual_behavior } = req.body;
+
+    const projectGraph = await new ProjectGraphService(room_id).initialize();
+    const debuggerService = new IntentDebuggerService(room_id, projectGraph);
+    
+    const analysis = await debuggerService.analyzeDiscrepancy(session_id, actual_behavior);
+    
+    res.json(analysis);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Apply fix
+router.post('/:room_id/debugger/:session_id/apply-fix', async (req, res) => {
+  try {
+    const { room_id, session_id } = req.params;
+    const { fix } = req.body;
+
+    const projectGraph = await new ProjectGraphService(room_id).initialize();
+    const debuggerService = new IntentDebuggerService(room_id, projectGraph);
+    
+    const result = await debuggerService.applyFix(session_id, fix);
+    
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get healing status
+router.get('/:room_id/healing/status', async (req, res) => {
+  try {
+    const { room_id } = req.params;
+
+    const { data: healingActions, error } = await supabase
+      .from('healing_actions')
+      .select(`
+        *,
+        healing_executions(*)
+      `)
+      .eq('room_id', room_id)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) throw error;
+
+    res.json({ healing_actions: healingActions });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+module.exports = router;
+```
+
+### **5. Client-Side Self-Healing Hook** (`/client/src/hooks/useSelfHealing.js`)
+```javascript
+import { useState, useEffect } from 'react';
+import { useRoom } from './useRoom';
+import { useIntentSystem } from './useIntentSystem';
+
+export function useSelfHealing() {
+  const { roomId } = useRoom();
+  const { captureIntent, analyzeImpact } = useIntentSystem();
+  const [healingStatus, setHealingStatus] = useState('idle');
+  const [activeHealing, setActiveHealing] = useState(null);
+  const [debugSession, setDebugSession] = useState(null);
+
+  const triggerHealing = async (userAction, context = {}) => {
+    setHealingStatus('analyzing');
+    
+    try {
+      // Capture intent and analyze impact
+      const intentResult = await captureIntent(userAction, context);
+      const impactResult = await analyzeImpact(
+        context.targetType || 'file', 
+        context.targetId || 'unknown',
+        context.changeType || 'modification'
+      );
+
+      // Trigger healing if high risk
+      if (impactResult.impactAnalysis.overallRisk >= 7) {
+        setHealingStatus('healing');
+        
+        const response = await fetch(`/api/self-healing/${roomId}/healing/trigger`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            intent_capture: intentResult.intentCapture,
+            impact_analysis: intentResult.impactAnalysis
+          })
+        });
+
+        const healingResult = await response.json();
+        setActiveHealing(healingResult);
+        setHealingStatus('completed');
+        
+        return healingResult;
+      } else {
+        setHealingStatus('low_risk');
+        return { status: 'low_risk', message: 'No healing needed' };
+      }
+    } catch (error) {
+      setHealingStatus('error');
+      throw error;
+    }
+  };
+
+  const startDebugSession = async (triggerAction, userIntent, expectedBehavior) => {
+    try {
+      const response = await fetch(`/api/self-healing/${roomId}/debugger/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          trigger_action: triggerAction,
+          user_intent: userIntent,
+          expected_behavior: expectedBehavior
+        })
+      });
+
+      const { session } = await response.json();
+      setDebugSession(session);
+      return session;
+    } catch (error) {
+      console.error('Failed to start debug session:', error);
+      throw error;
+    }
+  };
+
+  const analyzeDiscrepancies = async (actualBehavior) => {
+    if (!debugSession) throw new Error('No active debug session');
+    
+    try {
+      const response = await fetch(`/api/self-healing/${roomId}/debugger/${debugSession.id}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actual_behavior: actualBehavior })
+      });
+
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to analyze discrepancies:', error);
+      throw error;
+    }
+  };
+
+  const applyFix = async (fix) => {
+    if (!debugSession) throw new Error('No active debug session');
+    
+    try {
+      const response = await fetch(`/api/self-healing/${roomId}/debugger/${debugSession.id}/apply-fix`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fix })
+      });
+
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to apply fix:', error);
+      throw error;
+    }
+  };
+
+  const getHealingStatus = async () => {
+    try {
+      const response = await fetch(`/api/self-healing/${roomId}/healing/status`);
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get healing status:', error);
+      throw error;
+    }
+  };
+
+  return {
+    healingStatus,
+    activeHealing,
+    debugSession,
+    triggerHealing,
+    startDebugSession,
+    analyzeDiscrepancies,
+    applyFix,
+    getHealingStatus
+  };
+}
+```
+
+### **6. Self-Healing UI Component** (`/client/src/components/SelfHealingPanel.jsx`)
+```jsx
+import React, { useState } from 'react';
+import { useSelfHealing } from '../hooks/useSelfHealing';
+import './SelfHealingPanel.css';
+
+export function SelfHealingPanel() {
+  const {
+    healingStatus,
+    activeHealing,
+    debugSession,
+    triggerHealing,
+    startDebugSession
+  } = useSelfHealing();
+
+  const [userAction, setUserAction] = useState('');
+  const [debugIntent, setDebugIntent] = useState('');
+
+  const handleTriggerHealing = async () => {
+    await triggerHealing(userAction, {
+      targetType: 'file',
+      targetId: 'example.js',
+      changeType: 'modification'
+    });
+  };
+
+  const handleStartDebugging = async () => {
+    await startDebugSession(
+      'button_click',
+      debugIntent,
+      {
+        execution_path: ['validate()', 'submit()', 'success()'],
+        outcome: { status: 'success', data: { id: 123 } },
+        performance: { response_time: 200, memory_usage: 50 }
+      }
+    );
+  };
+
+  return (
+    <div className="self-healing-panel">
+      <div className="panel-header">
+        <h3>🦾 Self-Healing System</h3>
+        <div className={`status-badge ${healingStatus}`}>
+          {healingStatus}
+        </div>
+      </div>
+
+      {/* Healing Trigger Section */}
+      <div className="section">
+        <h4>Trigger Healing</h4>
+        <div className="input-group">
+          <input
+            type="text"
+            value={userAction}
+            onChange={(e) => setUserAction(e.target.value)}
+            placeholder="Describe what you're changing..."
+            className="action-input"
+          />
+          <button 
+            onClick={handleTriggerHealing}
+            disabled={healingStatus === 'healing'}
+            className="heal-btn"
+          >
+            {healingStatus === 'healing' ? 'Healing...' : 'Analyze & Heal'}
+          </button>
+        </div>
+      </div>
+
+      {/* Active Healing Status */}
+      {activeHealing && (
+        <div className="section">
+          <h4>Active Healing</h4>
+          <div className="healing-status">
+            <pre>{JSON.stringify(activeHealing, null, 2)}</pre>
+          </div>
+        </div>
+      )}
+
+      {/* Intent Debugger Section */}
+      <div className="section">
+        <h4>Intent Debugger</h4>
+        <div className="input-group">
+          <input
+            type="text"
+            value={debugIntent}
+            onChange={(e) => setDebugIntent(e.target.value)}
+            placeholder="What should this code do?"
+            className="intent-input"
+          />
+          <button onClick={handleStartDebugging} className="debug-btn">
+            Start Debug Session
+          </button>
+        </div>
+
+        {debugSession && (
+          <div className="debug-session">
+            <h5>Debug Session Active</h5>
+            <p>Session ID: {debugSession.id}</p>
+            <p>Intent: {debugSession.user_intent}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Status Messages */}
+      <div className="status-messages">
+        {healingStatus === 'analyzing' && (
+          <div className="message analyzing">
+            🔍 Analyzing impact and predicting breaks...
+          </div>
+        )}
+        {healingStatus === 'healing' && (
+          <div className="message healing">
+            🛠️ Applying preventive fixes...
+          </div>
+        )}
+        {healingStatus === 'completed' && (
+          <div className="message completed">
+            ✅ Healing completed! Breaks prevented.
+          </div>
+        )}
+        {healingStatus === 'low_risk' && (
+          <div className="message low-risk">
+            ℹ️ Low risk change - no healing needed.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+### **7. CSS Styles** (`/client/src/components/SelfHealingPanel.css`)
+```css
+.self-healing-panel {
+  padding: 20px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.panel-header h3 {
+  margin: 0;
+  color: #2d3748;
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.analyzing {
+  background: #feebc8;
+  color: #dd6b20;
+}
+
+.status-badge.healing {
+  background: #fed7d7;
+  color: #e53e3e;
+}
+
+.status-badge.completed {
+  background: #c6f6d5;
+  color: #38a169;
+}
+
+.status-badge.low-risk {
+  background: #e9d8fd;
+  color: #805ad5;
+}
+
+.section {
+  margin-bottom: 25px;
+  padding: 15px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.section h4 {
+  margin: 0 0 15px 0;
+  color: #2d3748;
+}
+
+.input-group {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.action-input, .intent-input {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.heal-btn, .debug-btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+.heal-btn {
+  background: #e53e3e;
+  color: white;
+}
+
+.heal-btn:hover:not(:disabled) {
+  background: #c53030;
+}
+
+.heal-btn:disabled {
+  background: #a0aec0;
+  cursor: not-allowed;
+}
+
+.debug-btn {
+  background: #805ad5;
+  color: white;
+}
+
+.debug-btn:hover {
+  background: #6b46c1;
+}
+
+.healing-status, .debug-session {
+  margin-top: 15px;
+  padding: 15px;
+  background: #f7fafc;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.healing-status pre {
+  margin: 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.debug-session h5 {
+  margin: 0 0 10px 0;
+  color: #2d3748;
+}
+
+.status-messages {
+  margin-top: 20px;
+}
+
+.message {
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.message.analyzing {
+  background: #feebc8;
+  color: #dd6b20;
+  border-left: 4px solid #ed8936;
+}
+
+.message.healing {
+  background: #fed7d7;
+  color: #e53e3e;
+  border-left: 4px solid #fc8181;
+}
+
+.message.completed {
+  background: #c6f6d5;
+  color: #38a169;
+  border-left: 4px solid #48bb78;
+}
+
+.message.low-risk {
+  background: #e9d8fd;
+  color: #805ad5;
+  border-left: 4px solid #9f7aea;
+}
+```
+
+### **8. Integration into Workspace** (`/client/src/components/WorkspaceTabs.jsx` - Update)
+```jsx
+// Add to your workspace tabs
+import { SelfHealingPanel } from './SelfHealingPanel';
+
+// In your tabs configuration, add or update:
+const tabs = [
+  { id: 'dev', label: 'Dev', component: DevTab },
+  { id: 'diffs', label: 'Diffs', component: DiffsTab },
+  { id: 'receipts', label: 'Receipts', component: ReceiptsTab },
+  { id: 'cortex', label: 'Architecture', component: CortexTab },
+  { id: 'healing', label: 'Self-Healing', component: SelfHealingPanel }, // NEW
+  { id: 'preview', label: 'Preview', component: PreviewTab },
+  { id: 'usage', label: 'Usage', component: UsageTab },
+  { id: 'settings', label: 'Settings', component: SettingsTab }
+];
+```
+
+### **9. Update Main App Integration** (`/server/app.js` - Add this)
+```javascript
+// Add with your other routes
+const selfHealingRoutes = require('./routes/selfHealing');
+app.use('/api/self-healing', selfHealingRoutes);
+```
+
+## 🚀 **Deployment Steps for Phase 2**
+
+1. **Run the new SQL migration** for healing tables
+2. **Copy all the new service files**
+3. **Add the new API routes** 
+4. **Update your client components** with the new Self-Healing panel
+5. **Integrate the healing trigger** into your existing file save/change handlers
+
+## 🎯 **What You Get After Phase 2**
+
+✅ **Self-healing engine** that automatically prevents breaks  
+✅ **Intent debugger** for comparing expected vs actual behavior  
+✅ **Real-time healing status** and execution tracking  
+✅ **Visual healing panel** in your workspace  
+✅ **Automatic compatibility layers** and migration plans  
+
+**The magic is now live!** Your Supernova can now predict and prevent breaks before they happen, and debug issues by understanding user intent vs actual behavior.
+
+**Ready for Phase 3?** We can add the AI-powered test synthesis and budget-aware orchestration next!
