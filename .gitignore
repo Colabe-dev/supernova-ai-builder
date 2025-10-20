@@ -4,3 +4,7 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Security: Never commit private keys
+server/auth/jwks/keys/*/
+!server/auth/jwks/keys/jwks.json

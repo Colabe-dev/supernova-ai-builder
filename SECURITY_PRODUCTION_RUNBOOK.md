@@ -18,21 +18,27 @@ This runbook covers the complete security stack:
 
 ### Generate Keys
 
-**Recommended: Use the built-in tool**
+**🔐 CRITICAL SECURITY REQUIREMENT**: Generate unique keys for each environment. Keys are stored locally and NEVER committed to version control.
+
+**Production Key Generation:**
 
 ```bash
-# Generate new RS256 keypair
+# On your production server, generate new RS256 keypair
 node tools/gen-jwks.mjs
 
-# Commit the keys
-git add server/auth/jwks/keys
-git commit -m "rotate jwks"
+# Keys are automatically excluded from git via .gitignore
+# Store private keys securely (Replit Secrets, AWS Secrets Manager, etc.)
 ```
 
 This creates:
-- `server/auth/jwks/keys/<kid>/private.pem` - Private key (keep secure!)
+- `server/auth/jwks/keys/<kid>/private.pem` - Private key (NEVER commit to git!)
 - `server/auth/jwks/keys/<kid>/public.pem` - Public key
 - `server/auth/jwks/keys/jwks.json` - Public key set for verification
+
+**For Replit Production:**
+1. Generate keys locally using `node tools/gen-jwks.mjs`
+2. Keys are stored in the production environment only
+3. Never commit or share private keys across environments
 
 ### Configure Environment
 
@@ -329,15 +335,13 @@ Note: In-memory rate limiting only works for single instance deployments.
 ### Key Rotation (Compromised Key)
 
 ```bash
-# Generate new key
+# Generate new key on production server
 node tools/gen-jwks.mjs
 
-# Deploy immediately (JWKS served with both old and new keys)
-git add server/auth/jwks/keys
-git commit -m "emergency: rotate compromised key"
-git push
-
-# After deployment, remove old key from jwks.json
+# Restart server (JWKS now includes both old and new keys for gradual transition)
+# After all tokens using old key expire, manually remove old key directory:
+# rm -rf server/auth/jwks/keys/<old-kid>
+# Then regenerate jwks.json or manually edit it to remove the old key entry
 ```
 
 ---

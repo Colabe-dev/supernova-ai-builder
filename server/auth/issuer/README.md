@@ -6,7 +6,18 @@ Self-hosted JWT issuer that mints RS256-signed tokens.
 
 **⚠️ IMPORTANT**: Before using this Auth Issuer, you must generate JWKS keys.
 
-The keys should be generated using `tools/gen-jwks.mjs` from the Security Pro overlay. If you don't have this tool, you can generate RS256 keypairs manually:
+**🔐 SECURITY**: Keys are generated locally per environment and NEVER committed to version control.
+
+### Generate Keys
+
+Use the built-in key generation tool:
+
+```bash
+# Generate new RS256 keypair (automatically excluded from git)
+node tools/gen-jwks.mjs
+```
+
+For manual generation:
 
 ```bash
 # Create keys directory
@@ -19,6 +30,9 @@ mkdir -p server/auth/jwks/keys/$KID
 # Generate RS256 keypair
 openssl genrsa -out server/auth/jwks/keys/$KID/private.pem 2048
 openssl rsa -in server/auth/jwks/keys/$KID/private.pem -pubout -out server/auth/jwks/keys/$KID/public.pem
+
+# Update jwks.json with the public key using tools/gen-jwks.mjs
+node tools/gen-jwks.mjs
 ```
 
 ## Environment Variables
@@ -80,6 +94,11 @@ node tools/mint-jwt.mjs --sub user123 --roles admin,finance --ttl 7200
 ## Security Notes
 
 1. **ISSUER_ADMIN_SECRET**: Keep this secret secure - it protects the token minting endpoint
-2. **Private Keys**: Never commit private keys to version control
+2. **Private Keys**: 
+   - ⚠️ NEVER commit private keys to version control
+   - Generate unique keys for each environment (dev/staging/production)
+   - Private keys are automatically excluded from git via .gitignore
+   - Store production keys securely (e.g., Replit Secrets, AWS Secrets Manager, HashiCorp Vault)
 3. **Key Rotation**: Generate new keys periodically and update the JWKS directory
 4. **Token Validation**: Use the JWKS verifier (from Security Pro overlay) to validate tokens on protected routes
+5. **First Time Setup**: Run `node tools/gen-jwks.mjs` before starting the server

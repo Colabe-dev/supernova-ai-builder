@@ -62,7 +62,9 @@ async function generateJWKS() {
 await generateJWKS();
 
 console.log('\n✅ JWKS rotation complete');
+console.log('\n⚠️  SECURITY WARNING: Private keys are stored locally and excluded from git.');
+console.log('    Generate new keys for each environment (dev/staging/production).');
 console.log('\nNext steps:');
-console.log('  1. Commit the new keys: git add server/auth/jwks/keys && git commit -m "rotate jwks"');
-console.log('  2. Restart your server to pick up the new key');
-console.log(`  3. Verify JWKS endpoint: curl http://localhost:5000/auth/.well-known/jwks.json`);
+console.log('  1. Restart your server to pick up the new key');
+console.log(`  2. Verify JWKS endpoint: curl http://localhost:5000/auth/.well-known/jwks.json`);
+console.log('  3. For production: Set up automated key rotation and secure key storage');
