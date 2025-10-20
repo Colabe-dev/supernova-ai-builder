@@ -1,0 +1,70 @@
+Done. I hardened the Collab Pay webhooks with timestamped signatures, replay protection, and a DLQ + worker.
+
+**Download:** [supernova-hardened-webhooks-20251020-002250.zip](sandbox:/mnt/data/supernova-hardened-webhooks-20251020-002250.zip)
+`sha256: 3b4c4f7d4e2f1b3d86b3b1a9a79bf120612ced82076436f8e3f8d46f14a60de52ec6586263a685a85de3721`
+
+# What’s included
+
+* `server/src/webhooks/processor.js` – shared processor (ledger + referral purchase).
+* `server/src/webhooks/collabPay.js` – HMAC v1 with timestamp tolerance (±300s by default), per-endpoint rate limit, DLQ enqueue on any failure, and a protected **DLQ processor** route.
+* `server/scripts/webhook-dlq-worker.mjs` – optional CLI worker to drain DLQ (can run via CronJob).
+* `sql/collab_webhooks_harden.sql` – creates `webhook_dead_letters` index/table (and ensures receipts table).
+* `patches/0001-server-index-wire-hardened.patch` – captures raw body and mounts the webhook router.
+
+# How to apply
+
+```bash
+# 1) unzip over repo
+unzip supernova-hardened-webhooks-20251020-002250.zip -d .
+
+# 2) DB schema
+psql (or Supabase SQL editor) < sql/collab_webhooks_harden.sql
+
+# 3) Env
+# server/.env (and Helm secrets)
+COLLAB_PAY_WEBHOOK_SECRET=your-shared-secret
+WEBHOOK_MAX_SKEW_SEC=300
+WEBHOOK_DLQ_TOKEN=your-long-random-token
+
+# 4) run (server)
+cd server && npm run dev
+```
+
+# Verify (local)
+
+1. Compute signature:
+
+```bash
+TS=$(date +%s)
+RAW='{"id":"evt_1","type":"payment.succeeded","data":{"amount_cents":4900,"currency":"USD","product":"pro","metadata":{"ref_code":"ABCD1234"}}}'
+SIG=$(printf "%s.%s" "$TS" "$RAW" | openssl dgst -sha256 -hmac "$COLLAB_PAY_WEBHOOK_SECRET" -hex | awk '{print $2}')
+curl -i -X POST http://localhost:3001/api/webhooks/collab-pay \
+  -H "content-type: application/json" \
+  -H "x-collab-id: evt_1" \
+  -H "x-collab-timestamp: $TS" \
+  -H "x-collab-signature: v1=$SIG" \
+  --data "$RAW"
+```
+
+Expect `200 { ok: true }`. Replays of the same `x-collab-id` are ignored (idempotent). Tampered timestamp/signature → DLQ.
+
+2. Drain DLQ via HTTP:
+
+```bash
+curl "http://localhost:3001/api/webhooks/dlq/process?token=$WEBHOOK_DLQ_TOKEN"
+```
+
+3. Or run the worker:
+
+```bash
+DLQ_PROCESS_URL="http://localhost:3001/api/webhooks/dlq/process?token=$WEBHOOK_DLQ_TOKEN" \
+node server/scripts/webhook-dlq-worker.mjs
+```
+
+# Production notes
+
+* Set a strict **ingress allowlist** for the webhook path to Collab’s IPs if available.
+* Rotate `COLLAB_PAY_WEBHOOK_SECRET` periodically; DLQ will prevent data loss during rotations.
+* Alerts: page on DLQ backlog size, signature failures spike, or timestamp skew anomalies.
+
+Want me to wire a **Kubernetes CronJob** to run the DLQ worker every minute and add **Prometheus metrics** for DLQ and failures? Say **“cron + metrics”** and I’ll ship that patch.
