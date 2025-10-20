@@ -1,0 +1,83 @@
+Here’s the smartest next move:
+
+# Next step — Stage deploy + ops hardening
+
+1. **Create `values-staging.yaml`** (put this in `deploy/helm/supernova-server/values-staging.yaml`):
+
+```yaml
+image:
+  repository: ghcr.io/<ORG>/<REPO>
+  tag: v1.0.0
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: api.staging.<YOUR_DOMAIN>
+      paths: [ { path: "/", pathType: Prefix } ]
+  tls:
+    - secretName: api-staging-tls
+      hosts: [ api.staging.<YOUR_DOMAIN> ]
+
+env:
+  NODE_ENV: "production"
+  DEV_AUTH_OPEN: "false"
+  AUTH_AUDIENCE: "supernova-api"
+  AUTH_ISSUER: "<AUTH_ISSUER_URL>"
+  RATE_LIMIT_WINDOW_MS: "60000"
+  RATE_LIMIT_READ_MAX: "120"
+  RATE_LIMIT_WRITE_MAX: "30"
+  RATE_LIMIT_WEBHOOK_MAX: "1200"
+  WEBHOOK_MAX_SKEW_SEC: "300"
+
+secrets:
+  DATABASE_URL: "<postgres://...>"
+  REDIS_URL: "<redis://...>"
+  AUTH_JWKS_URL: "<ISSUER>/.well-known/jwks.json"
+  COLLAB_PAY_WEBHOOK_SECRET: "<shared-hmac>"
+  SUPABASE_URL: "https://xxxx.supabase.co"
+  SUPABASE_SERVICE_ROLE: "<service-role>"
+```
+
+2. **Apply DB schemas (once)**
+
+* Run `sql/supabase_bootstrap.sql`, `sql/referrals.sql`, and `sql/collab_webhooks_harden.sql` in Supabase.
+
+3. **Deploy to staging**
+
+```bash
+# from repo root
+helmfile -e staging apply
+```
+
+4. **Smoke tests**
+
+```bash
+# health
+curl -s https://api.staging.<YOUR_DOMAIN>/healthz
+
+# webhook signed test (uses hardened path)
+TS=$(date +%s); RAW='{"id":"evt_test","type":"payment.succeeded","data":{"amount_cents":4900,"currency":"USD","product":"pro","metadata":{"ref_code":"ABCD1234"}}}'
+SIG=$(printf "%s.%s" "$TS" "$RAW" | openssl dgst -sha256 -hmac "<COLLAB_PAY_WEBHOOK_SECRET>" -hex | awk '{print $2}')
+curl -s -X POST https://api.staging.<YOUR_DOMAIN>/api/webhooks/collab-pay \
+  -H "content-type: application/json" \
+  -H "x-collab-id: evt_test" \
+  -H "x-collab-timestamp: $TS" \
+  -H "x-collab-signature: v1=$SIG" \
+  --data "$RAW"
+```
+
+5. **UI verification**
+
+* Open the app; check **every route** uses the new header + brighter raster and the **gradient (non-neon)** titles.
+
+---
+
+## After staging is green
+
+Say **“cron + metrics”** and I’ll ship a patch that:
+
+* Adds a **Kubernetes CronJob** to drain the webhook DLQ every minute.
+* Exposes **Prometheus metrics** (DLQ depth, signature failures, webhook latency) for alerting.
+
+If you’d rather prioritize the chat experience next, say **“LLM planner v2”** and I’ll replace the heuristic swarm with a provider-agnostic LLM tool-calling layer while keeping the same safe /dev FS + terminal rails.
