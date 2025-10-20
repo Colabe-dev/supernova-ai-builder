@@ -35,9 +35,11 @@ The observability stack includes Pino for structured JSON logging with pino-http
 The mobile application is built with Expo SDK 51 and React Native, featuring design token integration that syncs with the brand system. It includes Sentry for error tracking. The mobile CI/CD pipeline uses EAS (Expo Application Services) with three build profiles (development, preview, production) and GitHub Actions workflows for builds, OTA updates, and store submissions.
 
 ### AI Agent System
-Supernova utilizes specialized AI agents (Planner, Implementer, Tester, Fixer) to generate and modify application code, with an approvals workflow for reviewing and managing changes, and Git integration for creating branches upon approval.
+Supernova features a dual-mode AI system supporting both heuristic-based and LLM-powered agents for code generation, error analysis, and automated fixes.
 
-A real-time AI-assisted development system operates via WebSocket at `/api/chat/ws`. A multi-agent orchestrator coordinates roles: Planner for intent detection, Builder for file operations with diff preview, Tester for automated validation, Explainer for error analysis, and Fixer for automated remediation. Users interact through a React chat interface with an autonomy mode toggle (auto-apply vs. manual approval). File operations enforce whitelist security (`client/src`, `client/package.json`, `server`, `shared`, `public`) with path traversal protection. The patch workflow involves preview with unified diff, approval, and application with state persistence in `server/.supernova/`. The current implementation uses heuristic-based logic, designed for seamless LLM integration in future versions.
+**LLM Planner v2** (Provider-Agnostic): Upgraded AI system with OpenAI-compatible LLM integration for structured JSON planning, intelligent error explanation, and automated code fixes. Components include `server/llm/provider.js` (unified LLM wrapper supporting OpenAI, Azure, local models), `server/orchestrator/llm/plannerV2.js` (structured planning with questions, choices, and actions), `server/orchestrator/llm/explainerV2.js` (root-cause error analysis), and `server/orchestrator/llm/fixerV2.js` (automated fix proposals). Users can toggle LLM mode per-session via chat UI or enable globally with `LLM_PLANNER_V2=true`. Configuration: `OPENAI_API_KEY`, `LLM_MODEL` (default: gpt-4o-mini), `LLM_TEMPERATURE` (0.2), `LLM_MAX_TOKENS` (1200). Falls back to heuristic agents on LLM API errors.
+
+A real-time AI-assisted development system operates via WebSocket at `/api/chat/ws`. A multi-agent orchestrator coordinates roles: Planner (intent detection, task breakdown), Builder (file operations with diff preview), Tester (automated validation), Explainer (error analysis), and Fixer (automated remediation). Users interact through a React chat interface at `/chat` with autonomy mode toggle (auto-apply vs. manual approval) and LLM v2 toggle (AI-powered vs. heuristic planning). File operations enforce whitelist security (`client/`, `server/`, `shared/`, `public/`) with path traversal protection. The patch workflow involves preview with unified diff, approval, and application with state persistence. Heuristic agents provide reliable fallback when LLM features are unavailable.
 
 ### Key Features
 - **Project Management**: Create and manage projects from predefined templates (e.g., Next.js 14, Expo SDK 51).
@@ -52,7 +54,7 @@ A real-time AI-assisted development system operates via WebSocket at `/api/chat/
 - **Security & Reliability**: Implements security headers, rate limiting, dev console guards, SSE heartbeats, and detailed audit logging.
 
 ## External Dependencies
-- **OpenAI API**: For AI agent functionality.
+- **OpenAI API**: For LLM Planner v2 (provider-agnostic, supports OpenAI, Azure, local models via compatible endpoints).
 - **Supabase**: Backend-as-a-Service for authentication, database (Postgres), and storage with @supabase/supabase-js SDK.
 - **React**: Frontend UI library.
 - **Wouter**: Client-side routing for React.
