@@ -2,10 +2,16 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { pool } from '../db.js';
+import pg from 'pg';
 
+const { Pool } = pg;
 const router = Router();
 const rl = rateLimit({ windowMs: 60_000, limit: 120 });
+
+// Native Postgres pool for database operations
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 // POST /api/rooms/:id/shares - Create share link
 router.post('/api/rooms/:id/shares', rl, async (req, res) => {

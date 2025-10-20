@@ -14,7 +14,8 @@ function generateCode(): string {
   return Math.random().toString(36).substring(2, 10).toUpperCase();
 }
 
-router.get('/r/:code', async (req: Request, res: Response) => {
+// Only match short alphanumeric referral codes (8 chars), not long share tokens (snr_*)
+router.get('/r/:code([A-Z0-9]{6,10})', async (req: Request, res: Response) => {
   const { code } = req.params;
   const supabase = getSupabaseAdmin();
 

@@ -29,6 +29,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Mount Supabase routes (Sprint 4 - Supabase Integration)
   app.use(dbHealthRoutes);
   app.use(supabaseRoutes);
+  // Mount Rooms Sharing routes BEFORE Referrals to handle /r/snr_* tokens
+  app.use(roomsShareRoutes);
   // Mount Referrals routes (Sprint 4 - Referral Tracking)
   app.use(referralsRoutes);
   // Mount Billing routes (Monetization v1)
@@ -38,8 +40,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/usage", usageRoutes);
   // Mount Rooms routes (Sprint C - Rooms & Agents)
   app.use("/api/rooms", roomsRoutes);
-  // Mount Rooms Sharing routes (Sprint C - Rooms Sharing)
-  app.use(roomsShareRoutes);
   app.get("/api/projects", async (req, res) => {
     try {
       const projects = await storage.getProjects();
