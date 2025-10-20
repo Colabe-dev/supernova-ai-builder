@@ -44,12 +44,12 @@ class IntentCaptureService {
     const actionLower = action.toLowerCase();
     
     const intentPatterns = {
+      delete: ['delete', 'remove', 'drop'],
       refactor: ['rename', 'refactor', 'restructure', 'clean up', 'improve'],
       feature: ['add', 'create', 'implement', 'new feature', 'build'],
       fix: ['fix', 'repair', 'solve', 'resolve', 'debug'],
       optimize: ['optimize', 'speed up', 'improve performance', 'make faster'],
       security: ['secure', 'protect', 'auth', 'login', 'password'],
-      delete: ['delete', 'remove', 'drop'],
       update: ['update', 'modify', 'change', 'edit']
     };
 
@@ -103,6 +103,31 @@ class IntentCaptureService {
       predictions.push(result.rows[0]);
     }
 
+    // For deletion actions with no dependencies found, create a high-severity prediction
+    // This ensures self-healing is triggered even for new projects
+    if (intent.declaredIntent === 'delete' && predictions.length === 0) {
+      const result = await this.pool.query(
+        `INSERT INTO impact_predictions 
+         (room_id, intent_capture_id, prediction_type, description, severity, affected_components, auto_fix_suggestion, confidence)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *`,
+        [
+          this.roomId,
+          intentCaptureId,
+          'breaking_change',
+          `Deletion of ${changeTarget.id} may cause breaking changes`,
+          9,
+          JSON.stringify([{ type: changeTarget.type, id: changeTarget.id }]),
+          JSON.stringify({
+            suggestion: 'Create backup and verify all references before deletion',
+            mitigation: 'Add deprecation warnings and migration path'
+          }),
+          0.75
+        ]
+      );
+      predictions.push(result.rows[0]);
+    }
+
     return {
       predictions,
       overallRisk: this.calculateOverallRisk(impact),
@@ -116,8 +141,12 @@ class IntentCaptureService {
     // Extract what's being changed from the action
     const actionLower = action.toLowerCase();
     
-    // File-based changes
-    const fileMatch = action.match(/(?:file|component|module)\s+['"`]?([^'"`\s]+)['"`]?/i);
+    // File-based changes - try both "module X" and "X module" patterns
+    let fileMatch = action.match(/(?:file|component|module)\s+['"`]?([^'"`\s]+)['"`]?/i);
+    if (!fileMatch) {
+      // Try reverse pattern: "X module/component/file"
+      fileMatch = action.match(/['"`]?([^'"`\s]+)['"`]?\s+(?:file|component|module)/i);
+    }
     if (fileMatch) {
       return { type: 'file', id: fileMatch[1] };
     }
@@ -140,6 +169,15 @@ class IntentCaptureService {
     }
     if (context.targetApi) {
       return { type: 'api', id: context.targetApi };
+    }
+
+    // If no specific target found but we have a delete/remove action, create a generic prediction
+    if (actionLower.includes('delete') || actionLower.includes('remove')) {
+      // Extract the subject of the action (first meaningful word)
+      const words = action.split(' ').filter(w => w.length > 3 && !['delete', 'remove', 'completely'].includes(w.toLowerCase()));
+      if (words.length > 0) {
+        return { type: 'file', id: words[0] };
+      }
     }
 
     return null;

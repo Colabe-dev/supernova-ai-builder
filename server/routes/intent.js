@@ -5,7 +5,7 @@ import IntentCaptureService from '../services/IntentCaptureService.js';
 const router = Router();
 
 // Capture user intent and analyze impact
-router.post('/:room_id/capture', async (req, res) => {
+router.post('/:room_id/captures', async (req, res) => {
   try {
     const { room_id } = req.params;
     const { action, context } = req.body;
@@ -30,7 +30,7 @@ router.post('/:room_id/capture', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Failed to capture intent:', error);
-    res.status(500).json({ error: 'Failed to capture intent' });
+    res.status(500).json({ error: 'Failed to capture intent', details: error.message });
   }
 });
 

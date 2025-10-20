@@ -21,10 +21,12 @@ import {
 } from 'lucide-react';
 
 interface SelfHealingProps {
-  roomId: string | null;
+  roomId?: string | null;
 }
 
-export default function SelfHealing({ roomId }: SelfHealingProps) {
+export default function SelfHealing({ roomId: propRoomId }: SelfHealingProps) {
+  // Use provided roomId or default to a test UUID for standalone access
+  const roomId = propRoomId || '00000000-0000-0000-0000-000000000001';
   const [selectedIntent, setSelectedIntent] = useState<string>('');
   const [expandedAction, setExpandedAction] = useState<string | null>(null);
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
@@ -81,19 +83,6 @@ export default function SelfHealing({ roomId }: SelfHealingProps) {
       setExpectedBehavior('');
     },
   });
-
-  if (!roomId) {
-    return (
-      <div className="flex items-center justify-center h-full p-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Self-Healing Engine</CardTitle>
-            <CardDescription>Select a room to access self-healing features</CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
 
   const healingActions = (actionsData as any)?.healing_actions || [];
   const debugSessions = (sessionsData as any)?.sessions || [];

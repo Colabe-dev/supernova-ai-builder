@@ -19,10 +19,12 @@ import {
 } from 'lucide-react';
 
 interface IntentCaptureProps {
-  roomId: string | null;
+  roomId?: string | null;
 }
 
-export default function IntentCapture({ roomId }: IntentCaptureProps) {
+export default function IntentCapture({ roomId: propRoomId }: IntentCaptureProps) {
+  // Use provided roomId or default to a test UUID for standalone access
+  const roomId = propRoomId || '00000000-0000-0000-0000-000000000001';
   const [action, setAction] = useState('');
   const [targetType, setTargetType] = useState('file');
   const [targetId, setTargetId] = useState('');
@@ -60,19 +62,6 @@ export default function IntentCapture({ roomId }: IntentCaptureProps) {
       return res.json();
     },
   });
-
-  if (!roomId) {
-    return (
-      <div className="flex items-center justify-center h-full p-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Intent Capture & Impact Analysis</CardTitle>
-            <CardDescription>Select a room to access intent capture features</CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
-  }
 
   const captures = (capturesData as any)?.captures || [];
   const captureResult = captureIntentMutation.data as any;
