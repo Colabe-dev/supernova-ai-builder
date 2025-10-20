@@ -1,13 +1,20 @@
-const express = require('express');
-const router = express.Router();
-const { db } = require('../db');
+import { Router } from 'express';
+import pg from 'pg';
+
+const { Pool } = pg;
+const router = Router();
+
+// Native Postgres pool for database operations
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 // Get or initialize LPM for a room
 router.get('/:room_id/lpm', async (req, res) => {
   try {
     const { room_id } = req.params;
     
-    const result = await db.query(
+    const result = await pool.query(
       'SELECT * FROM living_project_models WHERE room_id = $1',
       [room_id]
     );
@@ -23,7 +30,7 @@ router.get('/:room_id/lpm', async (req, res) => {
         architecture: {}
       };
 
-      const insertResult = await db.query(
+      const insertResult = await pool.query(
         `INSERT INTO living_project_models (room_id, project_model) 
          VALUES ($1, $2) 
          RETURNING *`,
@@ -46,7 +53,7 @@ router.put('/:room_id/lpm', async (req, res) => {
     const { room_id } = req.params;
     const { project_model } = req.body;
 
-    const result = await db.query(
+    const result = await pool.query(
       `UPDATE living_project_models 
        SET project_model = $1, 
            updated_at = NOW(),
@@ -74,7 +81,7 @@ router.post('/:room_id/analyze-feature', async (req, res) => {
     const { feature_description } = req.body;
 
     // Get current LPM
-    const lpmResult = await db.query(
+    const lpmResult = await pool.query(
       'SELECT project_model FROM living_project_models WHERE room_id = $1',
       [room_id]
     );
@@ -87,7 +94,7 @@ router.post('/:room_id/analyze-feature', async (req, res) => {
     const impact = analyzeFeatureImpact(feature_description, lpmResult.rows[0].project_model);
     
     // Log this decision
-    await db.query(
+    await pool.query(
       `INSERT INTO project_decisions (room_id, decision_type, description, rationale, impact_analysis)
        VALUES ($1, $2, $3, $4, $5)`,
       [
@@ -112,7 +119,7 @@ router.get('/:room_id/consistency-report', async (req, res) => {
     const { room_id } = req.params;
     
     // Get LPM to ensure room exists
-    const lpmResult = await db.query(
+    const lpmResult = await pool.query(
       'SELECT id FROM living_project_models WHERE room_id = $1',
       [room_id]
     );
@@ -157,7 +164,7 @@ router.post('/:room_id/advise', async (req, res) => {
     const advice = generateArchitectureAdvice(feature, context || {});
     
     // Log this as an architecture decision
-    await db.query(
+    await pool.query(
       `INSERT INTO project_decisions (room_id, decision_type, description, rationale, impact_analysis)
        VALUES ($1, $2, $3, $4, $5)`,
       [
@@ -182,7 +189,7 @@ router.get('/:room_id/decisions', async (req, res) => {
     const { room_id } = req.params;
     const limit = parseInt(req.query.limit) || 50;
 
-    const result = await db.query(
+    const result = await pool.query(
       `SELECT * FROM project_decisions 
        WHERE room_id = $1 
        ORDER BY created_at DESC 
@@ -353,4 +360,4 @@ function generateArchitectureAdvice(feature, context) {
   };
 }
 
-module.exports = router;
+export default router;
