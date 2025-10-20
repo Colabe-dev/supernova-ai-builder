@@ -3,7 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { applySecurity } from "./hardening";
 import { applyObservability, errorHandler } from "./observability/index.js";
-import webhooksRouter from "./entitlements/webhooks.db.js";
+import webhooksRouter from "./entitlements/webhooks-enhanced.js";
 import issuerRouter from "./auth/issuer/index.js";
 import jwksRouter from "./auth/jwks/publish.js";
 import { parseAuthJwks, requireAuth } from "./auth/verify.js";
