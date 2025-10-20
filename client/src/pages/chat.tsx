@@ -29,6 +29,8 @@ export default function Chat() {
   const [log, setLog] = useState<ChatMessage[]>([]);
   const [text, setText] = useState('');
   const [autonomy, setAutonomy] = useState(false);
+  const [llm, setLlm] = useState(true); // Enable LLM v2 by default
+  const [model, setModel] = useState(''); // Optional model override
   const wsRef = useRef<WebSocket | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -75,7 +77,7 @@ export default function Chat() {
 
   const ask = () => {
     if (!text.trim()) return;
-    send({ type: 'user', text, autonomy });
+    send({ type: 'user', text, autonomy, llm, model: model.trim() });
     setText('');
   };
 
@@ -241,6 +243,36 @@ export default function Chat() {
               </Label>
             </div>
 
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="llm"
+                checked={llm}
+                onCheckedChange={(checked) => setLlm(checked === true)}
+                data-testid="checkbox-llm"
+              />
+              <Label htmlFor="llm" className="text-sm">
+                Use LLM Planner v2 (AI-powered planning)
+              </Label>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="model" className="text-sm">
+                Model (optional)
+              </Label>
+              <input
+                id="model"
+                type="text"
+                placeholder="gpt-4o-mini, gpt-4o, etc."
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                data-testid="input-model"
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave empty to use default from server config
+              </p>
+            </div>
+
             <div>
               <Label htmlFor="prompt" className="text-sm font-medium mb-2 block">
                 What would you like to build?
@@ -266,12 +298,23 @@ export default function Chat() {
           </div>
 
           <div className="pt-4 border-t space-y-2">
-            <p className="text-xs font-medium">💡 Try asking:</p>
+            <p className="text-xs font-medium">💡 {llm ? 'LLM Planner v2' : 'Heuristic Planner'}</p>
             <div className="space-y-1 text-xs text-muted-foreground">
-              <p>• "Create a landing page"</p>
-              <p>• "Make the theme dark"</p>
-              <p>• "Add a custom button component"</p>
-              <p>• "Build and test the app"</p>
+              {llm ? (
+                <>
+                  <p>• "Create a pricing page with checkout"</p>
+                  <p>• "Build a dashboard with charts"</p>
+                  <p>• "Add authentication to my app"</p>
+                  <p>• "Fix TypeScript errors and rebuild"</p>
+                </>
+              ) : (
+                <>
+                  <p>• "Create a landing page"</p>
+                  <p>• "Make the theme dark"</p>
+                  <p>• "Add a custom button component"</p>
+                  <p>• "Build and test the app"</p>
+                </>
+              )}
             </div>
           </div>
         </Card>
