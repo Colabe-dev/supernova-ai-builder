@@ -1,4 +1,4 @@
-import logger from '../utils/logger.js';
+import { logger } from '../observability/index.js';
 import OpenAI from 'openai';
 
 class AgentProcessor {

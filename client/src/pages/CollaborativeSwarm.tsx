@@ -392,11 +392,11 @@ export default function CollaborativeSwarm({ roomId }: CollaborativeSwarmProps) 
                               data-testid={`interaction-${interaction.id}`}
                             >
                               <div className="flex items-center gap-2 mb-1">
-                                <Badge variant="outline" className={getAgentColor(interaction.from_agent)} size="sm">
+                                <Badge variant="outline" className={`text-xs ${getAgentColor(interaction.from_agent)}`}>
                                   {interaction.from_agent}
                                 </Badge>
                                 <span className="text-xs">{getInteractionIcon(interaction.interaction_type)}</span>
-                                <Badge variant="outline" className={getAgentColor(interaction.to_agent)} size="sm">
+                                <Badge variant="outline" className={`text-xs ${getAgentColor(interaction.to_agent)}`}>
                                   {interaction.to_agent}
                                 </Badge>
                                 <span className="text-xs text-muted-foreground">

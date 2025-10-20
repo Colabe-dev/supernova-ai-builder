@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import CollaborativeSwarmOrchestrator from '../services/CollaborativeSwarmOrchestrator.js';
-import logger from '../utils/logger.js';
+import { logger } from '../observability/index.js';
 
 const router = Router();
 

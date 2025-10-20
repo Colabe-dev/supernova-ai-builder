@@ -1,6 +1,8 @@
-import { Pool } from 'pg';
-import logger from '../utils/logger.js';
+import pg from 'pg';
+import { logger } from '../observability/index.js';
 import AgentProcessor from './AgentProcessor.js';
+
+const { Pool } = pg;
 
 class CollaborativeSwarmOrchestrator {
   constructor() {
