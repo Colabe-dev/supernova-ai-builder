@@ -35,7 +35,7 @@ export default function Receipts({ roomId }: ReceiptsProps) {
 
   // Fetch receipts list
   const { data: receiptsData, isLoading, refetch } = useQuery({
-    queryKey: ['/api/receipts', roomId],
+    queryKey: [`/api/receipts?roomId=${roomId}`],
     enabled: !!roomId,
     refetchInterval: 5000, // Auto-refresh every 5s
   });
@@ -52,7 +52,7 @@ export default function Receipts({ roomId }: ReceiptsProps) {
       return apiRequest('POST', `/api/receipts/${receiptId}/rerun`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/receipts', roomId] });
+      queryClient.invalidateQueries({ queryKey: [`/api/receipts?roomId=${roomId}`] });
     },
   });
 
