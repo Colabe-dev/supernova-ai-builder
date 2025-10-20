@@ -58,26 +58,26 @@ export default function Landing() {
                 v1.0 Beta
               </Badge>
               <h1 className="text-5xl md:text-6xl font-bold tracking-tight">
-                Build Apps with
-                <span className="hero-title-gradient block mt-2" style={{ fontSize: '1.1em' }}>
-                  AI-Powered Agents
+                <span className="hero-title-gradient" style={{ fontSize: '1.1em' }}>
+                  Your AI Agent Swarm
                 </span>
               </h1>
               <p className="text-lg leading-relaxed" style={{ color: 'rgba(255, 255, 255, 0.85)' }}>
-                Supernova accelerates development with intelligent agents that plan,
-                implement, test, and fix your code. Focus on ideas while AI handles
-                the heavy lifting.
+                Supernova doesn't just assist—it autonomously builds. Our patented agent swarm technology coordinates multiple specialized AIs that work in concert, handling the complete development lifecycle from concept to production.
               </p>
               <div className="flex flex-wrap gap-4 pt-4">
                 <Link href="/dashboard">
-                  <Button size="lg" className="gap-2 neon-text-cyan font-semibold" data-testid="button-create-project" style={{ background: 'rgba(0, 255, 255, 0.1)', border: '2px solid var(--color-neon-cyan)' }}>
+                  <Button size="lg" className="gap-2 neon-text-cyan font-semibold" data-testid="button-launch-swarm" style={{ background: 'rgba(0, 255, 255, 0.1)', border: '2px solid var(--color-neon-cyan)' }}>
                     <Rocket className="h-4 w-4" />
-                    Create Project
+                    Launch Your Swarm
                   </Button>
                 </Link>
-                <Button size="lg" data-testid="button-view-templates" className="neon-text-pink font-semibold" style={{ background: 'rgba(255, 0, 255, 0.1)', border: '2px solid var(--color-neon-pink)' }}>
-                  View Templates
-                </Button>
+                <Link href="/workbench">
+                  <Button size="lg" data-testid="button-watch-swarm" className="neon-text-pink font-semibold" style={{ background: 'rgba(255, 0, 255, 0.1)', border: '2px solid var(--color-neon-pink)' }}>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Watch the Swarm in Action
+                  </Button>
+                </Link>
               </div>
               <div className="flex flex-wrap gap-8 pt-4 text-sm">
                 <div data-testid="stat-projects">
