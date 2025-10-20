@@ -17,6 +17,7 @@ import roomsRoutes from "./routes/rooms.js";
 import roomsShareRoutes from "./routes/rooms-share.js";
 import receiptsRoutes from "./routes/receipts.js";
 import lpmRoutes from "./routes/lpm.js";
+import intentRoutes from "./routes/intent.js";
 import { initChatWS } from "./chat/ws";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -46,6 +47,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/receipts", receiptsRoutes);
   // Mount LPM routes (Sprint D - Living Project Model)
   app.use("/api/lpm", lpmRoutes);
+  // Mount Intent routes (Sprint D - Enhanced Intent Capture)
+  app.use("/api/intent", intentRoutes);
   app.get("/api/projects", async (req, res) => {
     try {
       const projects = await storage.getProjects();
