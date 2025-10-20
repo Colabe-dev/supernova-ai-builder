@@ -4,42 +4,34 @@
  */
 
 import { Router } from 'express';
-import { createClient } from '@supabase/supabase-js';
+import pg from 'pg';
 
+const { Pool } = pg;
 const router = Router();
 
-// Supabase admin client for database operations
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-let supabase = null;
-if (supabaseUrl && supabaseServiceKey) {
-  supabase = createClient(supabaseUrl, supabaseServiceKey);
-}
+// Native Postgres pool for database operations
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 // GET /api/rooms - List all rooms
 router.get('/', async (req, res) => {
-  if (!supabase) {
-    return res.status(503).json({ error: 'Database not configured' });
-  }
-
   try {
     const workspaceId = req.query.workspace_id || null;
     
-    let query = supabase.from('rooms').select('*').order('created_at', { ascending: false });
+    let query = 'SELECT * FROM rooms';
+    let params = [];
     
     if (workspaceId) {
-      query = query.eq('workspace_id', workspaceId);
+      query += ' WHERE workspace_id = $1';
+      params = [workspaceId];
     }
     
-    const { data, error } = await query;
+    query += ' ORDER BY created_at DESC';
     
-    if (error) {
-      console.error('[Rooms] Fetch error:', error);
-      return res.status(500).json({ error: error.message });
-    }
+    const result = await pool.query(query, params);
     
-    res.json({ rooms: data || [] });
+    res.json({ rooms: result.rows });
   } catch (err) {
     console.error('[Rooms] Fetch exception:', err);
     res.status(500).json({ error: 'Failed to fetch rooms' });
@@ -48,10 +40,6 @@ router.get('/', async (req, res) => {
 
 // POST /api/rooms - Create a new room
 router.post('/', async (req, res) => {
-  if (!supabase) {
-    return res.status(503).json({ error: 'Database not configured' });
-  }
-
   try {
     const { name, workspace_id, created_by } = req.body;
     
@@ -59,34 +47,20 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Room name is required' });
     }
     
-    const { data, error } = await supabase
-      .from('rooms')
-      .insert({
-        name,
-        workspace_id: workspace_id || null,
-        created_by: created_by || null
-      })
-      .select()
-      .single();
+    const result = await pool.query(
+      'INSERT INTO rooms (name, workspace_id, created_by) VALUES ($1, $2, $3) RETURNING *',
+      [name, workspace_id || null, created_by || null]
+    );
     
-    if (error) {
-      console.error('[Rooms] Create error:', error);
-      return res.status(500).json({ error: error.message });
-    }
-    
-    res.status(201).json({ room: data });
+    res.status(201).json({ room: result.rows[0] });
   } catch (err) {
     console.error('[Rooms] Create exception:', err);
     res.status(500).json({ error: 'Failed to create room' });
   }
 });
 
-// PATCH /api/rooms/:id - Rename a room
+// PATCH /api/rooms/:id - Update room (rename)
 router.patch('/:id', async (req, res) => {
-  if (!supabase) {
-    return res.status(503).json({ error: 'Database not configured' });
-  }
-
   try {
     const { id } = req.params;
     const { name } = req.body;
@@ -95,118 +69,80 @@ router.patch('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Room name is required' });
     }
     
-    const { data, error } = await supabase
-      .from('rooms')
-      .update({ name })
-      .eq('id', id)
-      .select()
-      .single();
+    const result = await pool.query(
+      'UPDATE rooms SET name = $1 WHERE id = $2 RETURNING *',
+      [name, id]
+    );
     
-    if (error) {
-      console.error('[Rooms] Update error:', error);
-      if (error.code === 'PGRST116') {
-        return res.status(404).json({ error: 'Room not found' });
-      }
-      return res.status(500).json({ error: error.message });
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Room not found' });
     }
     
-    res.json({ room: data });
+    res.json({ room: result.rows[0] });
   } catch (err) {
     console.error('[Rooms] Update exception:', err);
     res.status(500).json({ error: 'Failed to update room' });
   }
 });
 
-// DELETE /api/rooms/:id - Delete a room
+// DELETE /api/rooms/:id - Delete room and all its messages
 router.delete('/:id', async (req, res) => {
-  if (!supabase) {
-    return res.status(503).json({ error: 'Database not configured' });
-  }
-
   try {
     const { id } = req.params;
     
-    const { error } = await supabase
-      .from('rooms')
-      .delete()
-      .eq('id', id);
+    // Delete all messages first (foreign key cascade might handle this, but being explicit)
+    await pool.query('DELETE FROM room_messages WHERE room_id = $1', [id]);
     
-    if (error) {
-      console.error('[Rooms] Delete error:', error);
-      return res.status(500).json({ error: error.message });
+    // Delete the room
+    const result = await pool.query('DELETE FROM rooms WHERE id = $1 RETURNING *', [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Room not found' });
     }
     
-    res.json({ success: true });
+    res.json({ success: true, room: result.rows[0] });
   } catch (err) {
     console.error('[Rooms] Delete exception:', err);
     res.status(500).json({ error: 'Failed to delete room' });
   }
 });
 
-// GET /api/rooms/:id/messages - Get room messages
+// GET /api/rooms/:id/messages - Get all messages in a room
 router.get('/:id/messages', async (req, res) => {
-  if (!supabase) {
-    return res.status(503).json({ error: 'Database not configured' });
-  }
-
   try {
     const { id } = req.params;
-    const limit = parseInt(req.query.limit) || 100;
     
-    const { data, error } = await supabase
-      .from('room_messages')
-      .select('*')
-      .eq('room_id', id)
-      .order('ts', { ascending: true })
-      .limit(limit);
+    const result = await pool.query(
+      'SELECT * FROM room_messages WHERE room_id = $1 ORDER BY ts ASC',
+      [id]
+    );
     
-    if (error) {
-      console.error('[Rooms] Fetch messages error:', error);
-      return res.status(500).json({ error: error.message });
-    }
-    
-    res.json({ messages: data || [] });
+    res.json({ messages: result.rows });
   } catch (err) {
     console.error('[Rooms] Fetch messages exception:', err);
     res.status(500).json({ error: 'Failed to fetch messages' });
   }
 });
 
-// POST /api/rooms/:id/messages - Add a message to a room
+// POST /api/rooms/:id/messages - Create a new message in a room
 router.post('/:id/messages', async (req, res) => {
-  if (!supabase) {
-    return res.status(503).json({ error: 'Database not configured' });
-  }
-
   try {
     const { id } = req.params;
     const { role, type, text, payload } = req.body;
     
     if (!role || !type) {
-      return res.status(400).json({ error: 'Role and type are required' });
+      return res.status(400).json({ error: 'role and type are required' });
     }
     
-    const { data, error } = await supabase
-      .from('room_messages')
-      .insert({
-        room_id: id,
-        role,
-        type,
-        text: text || null,
-        payload: payload || null
-      })
-      .select()
-      .single();
+    const result = await pool.query(
+      'INSERT INTO room_messages (room_id, role, type, text, payload) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+      [id, role, type, text || '', payload ? JSON.stringify(payload) : null]
+    );
     
-    if (error) {
-      console.error('[Rooms] Add message error:', error);
-      return res.status(500).json({ error: error.message });
-    }
-    
-    res.status(201).json({ message: data });
+    res.status(201).json({ message: result.rows[0] });
   } catch (err) {
-    console.error('[Rooms] Add message exception:', err);
-    res.status(500).json({ error: 'Failed to add message' });
+    console.error('[Rooms] Create message exception:', err);
+    res.status(500).json({ error: 'Failed to create message' });
   }
 });
 
