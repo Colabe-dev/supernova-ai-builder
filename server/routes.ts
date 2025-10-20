@@ -18,6 +18,7 @@ import roomsShareRoutes from "./routes/rooms-share.js";
 import receiptsRoutes from "./routes/receipts.js";
 import lpmRoutes from "./routes/lpm.js";
 import intentRoutes from "./routes/intent.js";
+import healingRoutes from "./routes/healing.js";
 import { initChatWS } from "./chat/ws";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -49,6 +50,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/lpm", lpmRoutes);
   // Mount Intent routes (Sprint D - Enhanced Intent Capture)
   app.use("/api/intent", intentRoutes);
+  // Mount Healing routes (Sprint D - Self-Healing Engine)
+  app.use("/api/healing", healingRoutes);
   app.get("/api/projects", async (req, res) => {
     try {
       const projects = await storage.getProjects();
