@@ -187,9 +187,50 @@ export default function Landing() {
         </section>
       </main>
 
-      <footer style={{ borderTop: '1px solid rgba(0, 255, 255, 0.2)' }} className="py-8">
-        <div className="container px-6 text-center text-sm" style={{ color: 'rgba(255, 255, 255, 0.5)' }}>
-          © 2025 <span className="gradient-text">Supernova</span>. AI-powered application builder.
+      <footer style={{ borderTop: '1px solid rgba(0, 255, 255, 0.2)' }} className="py-16">
+        <div className="container px-6">
+          <div className="grid md:grid-cols-3 gap-12 mb-12">
+            <div>
+              <h3 className="font-semibold mb-4 neon-text-cyan" data-testid="footer-heading-platform">Platform</h3>
+              <ul className="space-y-2 text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                <li data-testid="footer-item-react">React</li>
+                <li data-testid="footer-item-typescript">TypeScript</li>
+                <li data-testid="footer-item-tailwind">Tailwind</li>
+                <li data-testid="footer-item-nodejs">Node.js</li>
+              </ul>
+            </div>
+            
+            <div>
+              <h3 className="font-semibold mb-4 neon-text-pink" data-testid="footer-heading-technology">Technology</h3>
+              <ul className="space-y-2 text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                <li data-testid="footer-item-swarm">Agent Swarm</li>
+                <li data-testid="footer-item-architect">Architect Matrix™</li>
+                <li data-testid="footer-item-harmony">Harmony Engine</li>
+                <li data-testid="footer-item-resolver">Live Resolver</li>
+                <li data-testid="footer-item-guardian">Guardian System</li>
+              </ul>
+            </div>
+            
+            <div>
+              <h3 className="font-semibold mb-4 neon-text-yellow" data-testid="footer-heading-resources">Resources</h3>
+              <ul className="space-y-2 text-sm" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                <li data-testid="footer-item-docs">Documentation</li>
+                <li data-testid="footer-item-api">API Reference</li>
+                <li data-testid="footer-item-academy">Swarm Academy</li>
+                <li data-testid="footer-item-forum">Community Forum</li>
+                <li data-testid="footer-item-enterprise">Enterprise</li>
+              </ul>
+            </div>
+          </div>
+          
+          <div className="border-t pt-8 space-y-4 text-center text-sm" style={{ borderColor: 'rgba(0, 255, 255, 0.1)', color: 'rgba(255, 255, 255, 0.5)' }}>
+            <p data-testid="footer-company">
+              Project of <span className="neon-text-cyan">Colabe Solutions Limited</span> under <span className="neon-text-pink">Colabe Creative Studio</span>. Part of <span className="neon-text-yellow">Colabe Ecosystem</span>. All rights reserved.
+            </p>
+            <p data-testid="footer-copyright">
+              © 2025 <span className="gradient-text font-semibold">Supernova</span>. The only platform with coordinated AI agent swarm technology.
+            </p>
+          </div>
         </div>
       </footer>
     </div>
