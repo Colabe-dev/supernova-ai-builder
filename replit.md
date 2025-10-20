@@ -3,7 +3,15 @@
 ## Overview
 Supernova is an intelligent application builder platform that uses AI-powered agents to scaffold, build, and deploy web and mobile applications. Its core purpose is to streamline app development through AI, offering a robust tool for creating high-quality frontend and design-centric applications with production-ready code.
 
-## Recent Updates (Sprint A - Credits & Usage - In Progress)
+## Recent Updates (Sprint C - Rooms & Agents - In Progress)
+**Sprint C (Rooms)** deliverables completed:
+- **Rooms System**: Full CRUD operations for chat rooms via native Postgres integration
+- **Database Schema**: Native Postgres tables (rooms, room_messages) with CASCADE delete, RLS policies, and proper indexing
+- **Room Persistence**: All chat messages automatically persisted to database with full message history
+- **Three-Pane Workbench**: Updated layout with RoomsSidebar (left), ChatEmbedded (center), WorkspaceTabs (right)
+- **Room-Aware Chat**: ChatEmbedded component loads and saves messages per room, seamless room switching with history preservation
+- **API Routes**: `/api/rooms` (CRUD), `/api/rooms/:id/messages` (message persistence and retrieval)
+
 **Sprint A (Credits & Usage)** deliverables completed:
 - **Credits System**: Internal-only credit grant function (grantCreditsInternal), balance/history APIs
 - **Usage Analytics**: Real-time usage tracking for AI tokens (in/out), tasks, with daily/weekly/monthly aggregation
@@ -63,7 +71,8 @@ A real-time AI-assisted development system operates via WebSocket at `/api/chat/
 
 ### Key Features
 - **Project Management**: Create and manage projects from predefined templates (e.g., Next.js 14, Expo SDK 51).
-- **Workbench**: Two-pane development interface with live AI chat on the left and workspace tabs on the right. Resizable split view with Dev Console, Diffs, Preview, Usage analytics, and Settings. Connects to LLM Planner v2 via WebSocket for real-time AI assistance.
+- **Workbench**: Three-pane development interface with RoomsSidebar (left), AI chat (center), and workspace tabs (right). Resizable split view with Dev Console, Diffs, Preview, Usage analytics, and Settings. Connects to LLM Planner v2 via WebSocket for real-time AI assistance.
+- **Rooms System**: Organize conversations with persistent chat rooms. Full CRUD operations (create, rename, delete) with automatic message persistence to Postgres. Room history preserved across sessions with seamless switching between conversations.
 - **AI Chat Builder**: Real-time collaborative development with a WebSocket-powered swarm orchestrator.
 - **Supabase Integration**: One-click auto-integration with existing or new Supabase projects. Interactive setup wizard with health monitoring, automatic database bootstrap with RLS policies, and proper credential management for web/server/mobile.
 - **Referral Tracking**: Neutral affiliate system with link generation, cookie attribution, event tracking (signups, purchases), revenue reporting, and CSV export. No external SaaS dependencies.
