@@ -1,4 +1,4 @@
-import { Code2, Folder, FileCheck, Settings, Sparkles, Terminal, GitCompare, MessageSquare, Database, Gift, BarChart } from "lucide-react";
+import { Code2, Folder, FileCheck, Settings, Sparkles, Terminal, GitCompare, MessageSquare, Database, Gift, BarChart, Layers } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -18,6 +18,12 @@ const menuItems = [
     url: "/dashboard",
     icon: Folder,
     testId: "link-projects",
+  },
+  {
+    title: "Workbench",
+    url: "/workbench",
+    icon: Layers,
+    testId: "link-workbench",
   },
   {
     title: "Templates",

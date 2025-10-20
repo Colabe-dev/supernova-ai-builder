@@ -63,9 +63,11 @@ A real-time AI-assisted development system operates via WebSocket at `/api/chat/
 
 ### Key Features
 - **Project Management**: Create and manage projects from predefined templates (e.g., Next.js 14, Expo SDK 51).
+- **Workbench**: Two-pane development interface with live AI chat on the left and workspace tabs on the right. Resizable split view with Dev Console, Diffs, Preview, Usage analytics, and Settings. Connects to LLM Planner v2 via WebSocket for real-time AI assistance.
 - **AI Chat Builder**: Real-time collaborative development with a WebSocket-powered swarm orchestrator.
 - **Supabase Integration**: One-click auto-integration with existing or new Supabase projects. Interactive setup wizard with health monitoring, automatic database bootstrap with RLS policies, and proper credential management for web/server/mobile.
 - **Referral Tracking**: Neutral affiliate system with link generation, cookie attribution, event tracking (signups, purchases), revenue reporting, and CSV export. No external SaaS dependencies.
+- **Usage Analytics**: Real-time tracking and visualization of AI token usage (input/output), tasks, and system metrics with daily/weekly/monthly charts. Integrated into Workbench and available as standalone page.
 - **Monetization (Collab Pay)**: Complete subscription and billing system with pricing page (monthly/yearly toggle), SKU-based checkout flow, secure webhook processing with signature verification, real-time entitlement management from Postgres, upgrade modals, paywall guards, and billing settings dashboard. Supports Free tier (3 projects, 50 AI minutes) and Pro tier (50 projects, 500 AI minutes, priority support). Integrates with referral system for attribution tracking.
 - **Dev Console**: Integrated development environment with a file tree, code editor, live preview, and terminal access.
 - **Design Mode**: Real-time customization of design tokens with live visual feedback.

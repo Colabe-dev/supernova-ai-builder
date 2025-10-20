@@ -1,44 +1,32 @@
-# S4 — Auto‑Integrate Security (one‑click patch)
+# Supernova Workbench (split chat + workspace)
+Date: 20251020-060200
 
-This overlay **edits your `server/index.js` automatically** to wire:
-- JWKS auth (`/auth/.well-known/jwks.json` + verifier)
-- Redis/memory rate‑limiting (Security Pro compatible)
-- Secured Entitlements routes (`routes.db.secpro.js`)
+Adds a **two-pane builder** like you requested:
+- **Left:** Live chat (LLM Planner v2, autonomy, model field).
+- **Right:** Workspace tabs (Project/Dev/Diffs/Preview/Usage/Settings).
+- **Resizable** splitter (20–70%).
 
-## Install
+## Files
+- `client/src/pages/Workbench.jsx`
+- `client/src/components/ChatEmbedded.jsx`
+- `client/src/components/WorkspaceTabs.jsx`
+- `client/src/styles/workbench.css`
+- Patches:
+  - `patches/0001-client-main-workbench-route.patch` — adds route `/workbench`
+  - `patches/0002-header-add-workbench-link.patch` — header link
+  - `patches/0003-landing-redirect-optional.patch` — optional auto-redirect `/` → `/workbench`
+
+## Apply
 ```bash
-npm i jose ioredis
+unzip supernova-workbench-patch-20251020-060200.zip -d .
+
+# add route + nav
+git apply patches/0001-client-main-workbench-route.patch || echo "merge main.jsx manually"
+git apply patches/0002-header-add-workbench-link.patch || true
+# (optional) redirect landing to workbench
+# git apply patches/0003-landing-redirect-optional.patch || true
+
+cd client && npm run dev
 ```
 
-## Run (from repo root)
-```bash
-node tools/auto-integrate-security.mjs
-```
-The script is **idempotent**. Re‑running won’t duplicate lines.
-
-## Env to add (merge to your `.env`)
-```
-# Auth
-AUTH_JWKS_URL=https://<your-domain>/auth/.well-known/jwks.json
-AUTH_ISSUER=https://collab.supernova.auth
-AUTH_AUDIENCE=supernova-api
-DEV_AUTH_OPEN=false
-
-# Redis (optional; memory fallback if unset)
-REDIS_URL=redis://localhost:6379
-RATE_LIMIT_WINDOW_MS=60000
-RATE_LIMIT_READ_MAX=120
-RATE_LIMIT_WRITE_MAX=30
-RATE_LIMIT_WEBHOOK_MAX=1200
-```
-
-## What it does
-- Ensures imports for `jwksRouter`, `parseAuthJwks/requireAuth`, `rateLimit`
-- Mounts `/auth` (jwks) and `/api` (secured entitlements)
-- Does **not** remove your existing routes
-- Prints a dry‑run diff and prompts before writing (pass `--yes` to auto‑apply)
-
-If your entry point is not `server/index.js`, run:
-```bash
-node tools/auto-integrate-security.mjs --file path/to/your/server.js
-```
+> WebSocket path default is `/ws`. If your server uses a different endpoint, set `VITE_WS_PATH` in your client env.

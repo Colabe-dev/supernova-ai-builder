@@ -1,0 +1,9 @@
+*** a/client/src/pages/App.jsx
+--- b/client/src/pages/App.jsx
+@@
+ export default function App() {
++  // Optional: redirect landing straight to Workbench
++  // return (window.location.pathname==='/' && (window.location.href='/workbench'), null)
+   useEffect(() => {
+     fetch('/api/design/tokens').then(r=>r.json()).then(t => {
+       const theme = t.theme || {}

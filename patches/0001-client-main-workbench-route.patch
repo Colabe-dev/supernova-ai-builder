@@ -1,0 +1,11 @@
+*** a/client/src/main.jsx
+--- b/client/src/main.jsx
+@@
+ import App from './pages/App.jsx'
+ import Dev from './pages/Dev.jsx'
+ import Diff from './pages/Diff.jsx'
++import Workbench from './pages/Workbench.jsx'
+@@
+-  { path: '/diff', element: <Diff/> },
++  { path: '/diff', element: <Diff/> },
++  { path: '/workbench', element: <Workbench/> },

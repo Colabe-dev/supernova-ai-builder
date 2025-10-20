@@ -23,6 +23,7 @@ import SupabaseSetup from "@/pages/supabase-setup";
 import Referrals from "@/pages/referrals";
 import Pricing from "@/pages/pricing";
 import Usage from "@/pages/usage";
+import Workbench from "@/pages/Workbench";
 import NotFound from "@/pages/not-found";
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -125,7 +126,8 @@ function Router() {
         )}
       </Route>
       <Route path="/pricing" component={Pricing} />
-        <Route component={NotFound} />
+      <Route path="/workbench" component={Workbench} />
+      <Route component={NotFound} />
       </Switch>
     </AppShell>
   );

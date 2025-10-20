@@ -1,0 +1,11 @@
+*** a/client/src/components/Header.jsx
+--- b/client/src/components/Header.jsx
+@@
+       <nav style={{display:'flex', gap:12}}>
++        <a href="/workbench">Workbench</a>
+         <a href="/dev">Dev</a>
+         <a href="/diff">Diffs</a>
+         <a href="/chat">Chat</a>
+         <a href="/settings/supabase">Supabase</a>
+         <a href="/settings/referrals">Referrals</a>
+       </nav>
