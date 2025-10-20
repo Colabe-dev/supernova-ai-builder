@@ -37,10 +37,11 @@ export default function IntentCapture({ roomId }: IntentCaptureProps) {
   // Capture user intent
   const captureIntentMutation = useMutation({
     mutationFn: async (userAction: string) => {
-      return apiRequest('POST', `/api/intent/${roomId}/capture`, {
+      const res = await apiRequest('POST', `/api/intent/${roomId}/capture`, {
         action: userAction,
         context: {},
       });
+      return res.json();
     },
     onSuccess: () => {
       refetchCaptures();
@@ -51,11 +52,12 @@ export default function IntentCapture({ roomId }: IntentCaptureProps) {
   // Analyze impact
   const analyzeImpactMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('POST', `/api/intent/${roomId}/analyze-impact`, {
+      const res = await apiRequest('POST', `/api/intent/${roomId}/analyze-impact`, {
         targetType,
         targetId,
         changeType,
       });
+      return res.json();
     },
   });
 
