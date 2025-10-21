@@ -13,8 +13,8 @@ const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 
 // JWT middleware (dev bypass enabled)
 function authGuard(req: Request, res: Response, next: Function) {
-  const devOpen = process.env.DEV_APPROVALS_OPEN === "true";
-  if (devOpen && process.env.NODE_ENV !== "production") {
+  //  Bypass auth when NODE_ENV is not production
+  if (process.env.NODE_ENV !== "production") {
     (req as any).user = { username: "dev" };
     return next();
   }

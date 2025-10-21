@@ -24,11 +24,18 @@ export async function submitApproval(data: SubmitApprovalRequest): Promise<DiffA
 
 export async function listApprovals(): Promise<DiffApproval[]> {
   const response = await fetch("/api/approvals");
-  return response.json();
+  if (!response.ok) {
+    return [];
+  }
+  const data = await response.json();
+  return Array.isArray(data) ? data : [];
 }
 
-export async function getApproval(id: string): Promise<ApprovalWithSnapshots> {
+export async function getApproval(id: string): Promise<ApprovalWithSnapshots | null> {
   const response = await fetch(`/api/approvals/${id}`);
+  if (!response.ok) {
+    return null;
+  }
   return response.json();
 }
 
