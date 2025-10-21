@@ -17,20 +17,23 @@ export default function GitHubPage() {
   const [newRepoName, setNewRepoName] = useState("");
   const [newRepoDesc, setNewRepoDesc] = useState("");
 
-  const { data: user, isLoading: loadingUser } = useQuery({
+  const { data: user, isLoading: loadingUser } = useQuery<any>({
     queryKey: ["/api/github/user"],
   });
 
-  const { data: repos = [], isLoading: loadingRepos } = useQuery({
+  const { data: repos = [], isLoading: loadingRepos } = useQuery<any[]>({
     queryKey: ["/api/github/repos"],
   });
 
   const createRepoMutation = useMutation({
     mutationFn: async (data: { name: string; description: string; private: boolean }) => {
-      return await apiRequest("/api/github/repos", {
+      const response = await fetch("/api/github/repos", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
+      if (!response.ok) throw new Error("Failed to create repository");
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/github/repos"] });
