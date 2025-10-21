@@ -20,9 +20,12 @@ import lpmRoutes from "./routes/lpm.js";
 import intentRoutes from "./routes/intent.js";
 import healingRoutes from "./routes/healing.js";
 import swarmRoutes from "./routes/swarm.js";
+import githubRoutes from "./routes/github.js";
 import { initChatWS } from "./chat/ws";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Mount GitHub API routes
+  app.use("/api/github", githubRoutes);
   // Mount dev console routes
   app.use("/api", devRoutes);
   // Mount approvals routes (Sprint 3)

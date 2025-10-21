@@ -27,6 +27,7 @@ import Workbench from "@/pages/Workbench";
 import SharedRoom from "@/pages/SharedRoom";
 import IntentCapture from "@/pages/IntentCapture";
 import SelfHealing from "@/pages/SelfHealing";
+import GitHubPage from "@/pages/GitHub";
 import NotFound from "@/pages/not-found";
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -139,6 +140,13 @@ function Router() {
         {() => (
           <DashboardLayout>
             <SelfHealing roomId={null} />
+          </DashboardLayout>
+        )}
+      </Route>
+      <Route path="/github">
+        {() => (
+          <DashboardLayout>
+            <GitHubPage />
           </DashboardLayout>
         )}
       </Route>
