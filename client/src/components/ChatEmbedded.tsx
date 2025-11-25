@@ -124,6 +124,16 @@ export default function ChatEmbedded({ roomId }: ChatEmbeddedProps) {
     }
   };
 
+  if (!roomId) {
+    return (
+      <div className="chat-embed">
+        <div className="log" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: 0.5, textAlign: 'center', padding: '1rem' }}>
+          Select a room from the sidebar to start chatting. If you don't have one yet, click the + button to create your first room.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="chat-embed">
       <div className="log" ref={logRef}>
