@@ -46,7 +46,7 @@ export function RoomsSidebar({ selectedRoomId, onRoomSelect }: RoomsSidebarProps
   const [shareOut, setShareOut] = useState('');
 
   // Fetch rooms
-  const { data: roomsData } = useQuery<{ rooms: Room[] }>({
+  const { data: roomsData, isFetching } = useQuery<{ rooms: Room[] }>({
     queryKey: ['/api/rooms'],
   });
 
@@ -54,10 +54,12 @@ export function RoomsSidebar({ selectedRoomId, onRoomSelect }: RoomsSidebarProps
 
   // Auto-select the first available room so users can start chatting immediately
   useEffect(() => {
+    if (isFetching) return;
+
     if (!selectedRoomId && rooms.length > 0) {
       onRoomSelect(rooms[0].id);
     }
-  }, [rooms, selectedRoomId, onRoomSelect]);
+  }, [rooms, selectedRoomId, onRoomSelect, isFetching]);
 
   // Create room mutation
   const createMutation = useMutation({
