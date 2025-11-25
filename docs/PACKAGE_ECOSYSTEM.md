@@ -236,6 +236,7 @@ Both packages use the same environment schema:
 AUTH_JWKS_URL=https://api.supernova.com/auth/.well-known/jwks.json
 AUTH_ISSUER=https://collab.supernova.auth
 AUTH_AUDIENCE=supernova-api
+APP_URL=https://app.supernova.com
 DEV_AUTH_OPEN=true|false
 ISSUER_ADMIN_SECRET=<secret>
 APP_JWT_SECRET=<secret>
