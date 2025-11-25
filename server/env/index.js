@@ -1,3 +1,14 @@
+function parseAllowedOrigins(raw) {
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+}
+
 export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '5000', 10),
@@ -35,5 +46,9 @@ export const config = {
   
   session: {
     secret: process.env.SESSION_SECRET || 'dev-session-secret-change-in-production',
+  },
+
+  security: {
+    allowedOrigins: parseAllowedOrigins(process.env.CORS_ALLOWED_ORIGINS),
   },
 };
