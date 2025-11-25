@@ -1,7 +1,7 @@
 import express, { type Express } from "express";
 import cookieParser from "cookie-parser";
 import { applySecurity } from "./hardening.ts";
-import { applyObservability, errorHandler } from "./observability/index.js";
+import { applyObservability, errorHandler, logger } from "./observability/index.js";
 import { createResponseLoggingMiddleware } from "./observability/response-logger.ts";
 import webhooksRouter from "./entitlements/webhooks-enhanced.js";
 import issuerRouter from "./auth/issuer/index.js";
@@ -17,6 +17,32 @@ function log(message: string, source = "express") {
   });
 
   console.log(`${formattedTime} [${source}] ${message}`);
+}
+
+function registerProcessErrorHandlers() {
+  if (process.env.NODE_ENV === "test") return;
+
+  const serializeError = (error: unknown) => {
+    if (error instanceof Error) return error;
+
+    if (typeof error === "string") {
+      return new Error(error);
+    }
+
+    try {
+      return new Error(JSON.stringify(error));
+    } catch {
+      return new Error("Unknown error");
+    }
+  };
+
+  process.on("unhandledRejection", (reason) => {
+    logger.error({ err: serializeError(reason) }, "Unhandled promise rejection");
+  });
+
+  process.on("uncaughtException", (error) => {
+    logger.error({ err: serializeError(error) }, "Uncaught exception");
+  });
 }
 
 // Enable dev console features in development
@@ -57,6 +83,7 @@ export function createApp(): Express {
 }
 
 if (process.env.NODE_ENV !== "test") {
+  registerProcessErrorHandlers();
   const app = createApp();
 
   (async () => {
