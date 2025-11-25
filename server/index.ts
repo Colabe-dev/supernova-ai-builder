@@ -42,6 +42,7 @@ function registerProcessErrorHandlers() {
 
   process.on("uncaughtException", (error) => {
     logger.error({ err: serializeError(error) }, "Uncaught exception");
+    setTimeout(() => process.exit(1), 100);
   });
 }
 
