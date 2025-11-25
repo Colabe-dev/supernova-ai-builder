@@ -25,6 +25,12 @@ async function runMigrations() {
     await client.connect();
     console.log('Connected to database');
 
+    try {
+      await client.query('CREATE EXTENSION IF NOT EXISTS "pgcrypto"');
+    } catch (err) {
+      console.warn('Warning: unable to ensure pgcrypto extension:', err.message);
+    }
+
     // Ensure schema_migrations table exists
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (

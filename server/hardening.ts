@@ -1,7 +1,57 @@
 import helmet from "helmet";
-import cors from "cors";
+import cors, { type CorsOptions, type CorsOptionsDelegate } from "cors";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { Express, Request, Response, NextFunction } from "express";
+import { config } from "./env/index.js";
+
+export interface OriginCheckResult {
+  allowed: boolean;
+  message?: string;
+}
+
+export interface OriginValidator {
+  allowAllInDevelopment: boolean;
+  check: (origin?: string | null) => OriginCheckResult;
+}
+
+export function createOriginValidator(
+  allowedOrigins: string[],
+  isDevelopment: boolean,
+): OriginValidator {
+  const normalizedOrigins = Array.from(
+    new Set(
+      allowedOrigins
+        .map((origin) => origin.trim())
+        .filter((origin) => origin.length > 0),
+    ),
+  );
+
+  const allowAllInDevelopment = isDevelopment && normalizedOrigins.length === 0;
+
+  const check = (origin?: string | null): OriginCheckResult => {
+    if (!origin) {
+      return { allowed: true };
+    }
+
+    if (allowAllInDevelopment) {
+      return { allowed: true };
+    }
+
+    if (normalizedOrigins.includes(origin)) {
+      return { allowed: true };
+    }
+
+    return {
+      allowed: false,
+      message: `Origin ${origin} is not allowed`,
+    };
+  };
+
+  return {
+    allowAllInDevelopment,
+    check,
+  };
+}
 
 export function applySecurity(app: Express) {
   // Trust proxy for X-Forwarded-For (Replit environment)
@@ -19,15 +69,45 @@ export function applySecurity(app: Express) {
   );
 
   // CORS with credentials
-  app.use(
-    cors({
-      origin: true,
-      credentials: true,
-    })
+  const isDevelopment = config.nodeEnv !== "production";
+  const { allowAllInDevelopment, check } = createOriginValidator(
+    config.security?.allowedOrigins ?? [],
+    isDevelopment,
   );
 
+  const corsOptionsDelegate: CorsOptionsDelegate<Request> = (req, callback) => {
+    const origin = req.header("Origin") ?? undefined;
+    const result = check(origin);
+
+    if (result.allowed) {
+      const options: CorsOptions = {
+        origin: allowAllInDevelopment ? true : origin ?? true,
+        credentials: true,
+      };
+
+      callback(null, options);
+      return;
+    }
+
+    if (origin) {
+      console.warn("[security] Blocked request from disallowed origin", {
+        origin,
+        method: req.method,
+        path: req.originalUrl,
+      });
+    }
+
+    const error: Error & { status?: number } = new Error(
+      result.message ?? "Origin is not allowed",
+    );
+    error.status = 403;
+
+    callback(error);
+  };
+
+  app.use(cors(corsOptionsDelegate));
+
   // Global rate limiting - more lenient in development
-  const isDevelopment = process.env.NODE_ENV !== "production";
   app.use(
     rateLimit({
       windowMs: 60_000,

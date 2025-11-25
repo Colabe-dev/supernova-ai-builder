@@ -4,6 +4,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { applySecurity } from "./hardening";
 import { applyObservability, errorHandler } from "./observability/index.js";
+import { createResponseLoggingMiddleware } from "./observability/response-logger";
 import webhooksRouter from "./entitlements/webhooks-enhanced.js";
 import issuerRouter from "./auth/issuer/index.js";
 import jwksRouter from "./auth/jwks/publish.js";
@@ -73,6 +74,24 @@ export function createApp(): Express {
 
   return app;
 }
+// Apply security hardening (helmet, CORS, rate limiting)
+applySecurity(app);
+
+// Apply observability (Pino logging + Sentry)
+applyObservability(app);
+
+// IMPORTANT: Register webhook routes BEFORE JSON body parsing
+// to allow raw body access for signature verification
+app.use('/api/webhooks', webhooksRouter);
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+
+// Mount Security Pro: JWKS endpoint and Auth Issuer
+app.use('/auth', jwksRouter);  // GET /auth/.well-known/jwks.json
+app.use('/auth', issuerRouter); // POST /auth/token
+
+app.use(createResponseLoggingMiddleware(log));
 
 if (process.env.NODE_ENV !== "test") {
   const app = createApp();

@@ -9,22 +9,49 @@ import { verifyHMAC } from './hmac.js';
 import { logger } from '../observability/index.js';
 import { getProductBySKU } from '../billing/products.js';
 
+const defaultDeps = {
+  grantCoins,
+  grantSubscription,
+  revokeSubscription,
+  getProductBySKU,
+  logger,
+};
+
+const deps = { ...defaultDeps };
+
+export function __setWebhookDependencies(overrides = {}) {
+  Object.assign(deps, overrides);
+}
+
+export function __resetWebhookDependencies() {
+  Object.assign(deps, defaultDeps);
+}
+
 const router = express.Router();
+
+// Ensure the Collab Pay webhook route always receives the raw request body
+// regardless of any JSON/body parsing middleware applied elsewhere.
+router.use('/collab-pay', express.raw({ type: 'application/json' }));
 
 // In-memory event tracking for idempotency (use Redis/DB in production)
 const processedEvents = new Set();
 const EVENT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // Periodic cleanup of old events
-setInterval(() => {
+const cleanupInterval = setInterval(() => {
   if (processedEvents.size > 10000) {
     processedEvents.clear();
-    logger.info('Cleared webhook event cache');
+    deps.logger.info('Cleared webhook event cache');
   }
 }, EVENT_TTL_MS);
 
+// Allow process exit in test environments where this router is imported
+if (typeof cleanupInterval.unref === 'function') {
+  cleanupInterval.unref();
+}
+
 // POST /collab-pay - Enhanced webhook handler with SKU mapping
-router.post('/collab-pay', express.raw({ type: 'application/json' }), async (req, res) => {
+router.post('/collab-pay', async (req, res) => {
   try {
     const secret = process.env.COLLAB_PAY_WEBHOOK_SECRET;
     const timestamp = req.headers['x-collab-timestamp'];
@@ -33,13 +60,13 @@ router.post('/collab-pay', express.raw({ type: 'application/json' }), async (req
 
     // Enforce signature verification - fail if secret not configured
     if (!secret) {
-      logger.error('COLLAB_PAY_WEBHOOK_SECRET not configured - rejecting webhook');
+      deps.logger.error('COLLAB_PAY_WEBHOOK_SECRET not configured - rejecting webhook');
       return res.status(500).json({ ok: false, error: 'Webhook secret not configured' });
     }
 
     // Idempotency check
     if (eventId && processedEvents.has(eventId)) {
-      logger.info({ eventId }, 'Duplicate webhook event - already processed');
+      deps.logger.info({ eventId }, 'Duplicate webhook event - already processed');
       return res.json({ ok: true, message: 'Already processed' });
     }
 
@@ -50,7 +77,7 @@ router.post('/collab-pay', express.raw({ type: 'application/json' }), async (req
       const maxSkew = parseInt(process.env.WEBHOOK_MAX_SKEW_SEC || '300');
 
       if (skewSec > maxSkew) {
-        logger.warn({ skewSec, maxSkew }, 'Webhook timestamp skew exceeded');
+        deps.logger.warn({ skewSec, maxSkew }, 'Webhook timestamp skew exceeded');
         return res.status(401).json({ ok: false, error: 'Timestamp too old' });
       }
 
@@ -58,7 +85,7 @@ router.post('/collab-pay', express.raw({ type: 'application/json' }), async (req
       const payload = `${timestamp}.${rawBody.toString()}`;
       
       if (!verifyHMAC(Buffer.from(payload), signature, secret)) {
-        logger.warn({ eventId, signature }, 'Webhook signature verification failed');
+        deps.logger.warn({ eventId, signature }, 'Webhook signature verification failed');
         return res.status(401).json({ ok: false, error: 'Invalid signature' });
       }
     }
@@ -68,7 +95,7 @@ router.post('/collab-pay', express.raw({ type: 'application/json' }), async (req
     const { event, type, data } = payload;
     const eventType = event || type; // Support both field names
 
-    logger.info({ eventType, eventId, profileId: data?.profileId }, 'Processing webhook event');
+    deps.logger.info({ eventType, eventId, profileId: data?.profileId }, 'Processing webhook event');
 
     // Handle payment.succeeded event (Collab Pay standard)
     if (eventType === 'payment.succeeded') {
@@ -76,15 +103,15 @@ router.post('/collab-pay', express.raw({ type: 'application/json' }), async (req
       const profileId = metadata?.profileId || data.customer_id;
 
       if (!profileId) {
-        logger.warn({ eventId }, 'Missing profileId in payment.succeeded');
+        deps.logger.warn({ eventId }, 'Missing profileId in payment.succeeded');
         return res.status(400).json({ ok: false, error: 'profileId required' });
       }
 
       // Look up product by SKU
-      const productConfig = getProductBySKU(product);
-      
+      const productConfig = deps.getProductBySKU(product);
+
       if (!productConfig) {
-        logger.warn({ product, eventId }, 'Unknown product SKU in webhook');
+        deps.logger.warn({ product, eventId }, 'Unknown product SKU in webhook');
         return res.status(400).json({ ok: false, error: 'Unknown product' });
       }
 
@@ -92,25 +119,25 @@ router.post('/collab-pay', express.raw({ type: 'application/json' }), async (req
       const { entitlements } = productConfig;
 
       if (entitlements.plan) {
-        await grantSubscription(profileId, entitlements.plan);
-        logger.info({ profileId, plan: entitlements.plan }, 'Granted subscription from webhook');
+        await deps.grantSubscription(profileId, entitlements.plan);
+        deps.logger.info({ profileId, plan: entitlements.plan }, 'Granted subscription from webhook');
       }
 
       if (entitlements.coins && entitlements.coins > 0) {
-        await grantCoins(
-          profileId, 
-          entitlements.coins, 
-          'purchase', 
-          'collabpay', 
+        await deps.grantCoins(
+          profileId,
+          entitlements.coins,
+          'purchase',
+          'collabpay',
           eventId || `webhook:${Date.now()}`
         );
-        logger.info({ profileId, coins: entitlements.coins }, 'Granted coins from webhook');
+        deps.logger.info({ profileId, coins: entitlements.coins }, 'Granted coins from webhook');
       }
 
       // Record referral conversion if ref_code is present
       const refCode = metadata?.ref_code;
       if (refCode) {
-        logger.info({ refCode, amount_cents, profileId }, 'Payment with referral code');
+        deps.logger.info({ refCode, amount_cents, profileId }, 'Payment with referral code');
         // TODO: Record referral conversion event
       }
 
@@ -134,8 +161,8 @@ router.post('/collab-pay', express.raw({ type: 'application/json' }), async (req
         return res.status(400).json({ ok: false, error: 'Invalid amount' });
       }
 
-      await grantCoins(profileId, amount, 'webhook', 'collabpay', eventId || `webhook:${Date.now()}`);
-      logger.info({ profileId, amount }, 'Granted coins from legacy event');
+      await deps.grantCoins(profileId, amount, 'webhook', 'collabpay', eventId || `webhook:${Date.now()}`);
+      deps.logger.info({ profileId, amount }, 'Granted coins from legacy event');
       return res.json({ ok: true });
     }
 
@@ -146,8 +173,8 @@ router.post('/collab-pay', express.raw({ type: 'application/json' }), async (req
         return res.status(400).json({ ok: false, error: 'Missing profileId or plan' });
       }
 
-      await grantSubscription(profileId, plan);
-      logger.info({ profileId, plan }, 'Activated subscription from legacy event');
+      await deps.grantSubscription(profileId, plan);
+      deps.logger.info({ profileId, plan }, 'Activated subscription from legacy event');
       return res.json({ ok: true });
     }
 
@@ -158,19 +185,19 @@ router.post('/collab-pay', express.raw({ type: 'application/json' }), async (req
         return res.status(400).json({ ok: false, error: 'Missing profileId or plan' });
       }
 
-      await revokeSubscription(profileId, plan);
-      logger.info({ profileId, plan }, 'Cancelled subscription from legacy event');
+      await deps.revokeSubscription(profileId, plan);
+      deps.logger.info({ profileId, plan }, 'Cancelled subscription from legacy event');
       return res.json({ ok: true });
     }
 
-    logger.warn({ eventType, eventId }, 'Unknown webhook event type');
+    deps.logger.warn({ eventType, eventId }, 'Unknown webhook event type');
     return res.status(400).json({ ok: false, error: 'Unknown event type' });
 
   } catch (err) {
-    logger.error({ err, eventId: req.headers['x-collab-id'] }, 'Webhook processing error');
-    
+    deps.logger.error({ err, eventId: req.headers['x-collab-id'] }, 'Webhook processing error');
+
     // TODO: Write to DLQ for retry
-    
+
     res.status(500).json({ ok: false, error: 'Webhook processing failed' });
   }
 });
