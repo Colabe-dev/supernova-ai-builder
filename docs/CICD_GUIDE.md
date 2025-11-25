@@ -42,6 +42,7 @@ Set these in Helm values files or ExternalSecrets:
 - `REDIS_URL` / `REDIS_SENTINEL` / `REDIS_CLUSTER_NODES`
 - `SESSION_SECRET` - Express session encryption
 - `APP_JWT_SECRET` - JWT signing secret
+- `APP_URL` - Base URL for redirect/callback links
 - `ISSUER_ADMIN_SECRET` - Auth issuer admin password
 - `COLLAB_PAY_WEBHOOK_SECRET` - Webhook HMAC verification
 - `GOOGLE_SERVICE_ACCOUNT_KEY` - IAP verification (one-line JSON)

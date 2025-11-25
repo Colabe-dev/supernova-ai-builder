@@ -18,7 +18,7 @@ const COLLAB_PAY_SECRET = process.env.COLLAB_PAY_SECRET;
  */
 export async function createCheckoutSession(productKey, profileId, options = {}) {
   const product = PRODUCTS[productKey];
-  
+
   if (!product) {
     throw new Error(`Invalid product key: ${productKey}`);
   }
@@ -28,17 +28,29 @@ export async function createCheckoutSession(productKey, profileId, options = {})
   }
 
   const {
-    successUrl = process.env.APP_URL + '/dashboard?payment=success',
-    cancelUrl = process.env.APP_URL + '/pricing?payment=cancelled',
+    successUrl,
+    cancelUrl,
     metadata = {},
+    appUrl,
   } = options;
+
+  const baseAppUrl = process.env.APP_URL || appUrl;
+
+  if (!baseAppUrl) {
+    throw new Error('APP_URL is not configured. Set the APP_URL environment variable or provide an appUrl option.');
+  }
+
+  const normalizedAppUrl = baseAppUrl.replace(/\/+$/, '');
+
+  const resolvedSuccessUrl = successUrl || `${normalizedAppUrl}/dashboard?payment=success`;
+  const resolvedCancelUrl = cancelUrl || `${normalizedAppUrl}/pricing?payment=cancelled`;
 
   // Build checkout request
   const payload = {
     product_sku: product.sku,
     customer_id: profileId,
-    success_url: successUrl,
-    cancel_url: cancelUrl,
+    success_url: resolvedSuccessUrl,
+    cancel_url: resolvedCancelUrl,
     metadata: {
       profileId,
       productKey,
