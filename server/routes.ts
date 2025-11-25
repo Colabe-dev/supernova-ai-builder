@@ -1,7 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertAgentRunSchema } from "@shared/schema";
 import { insertProjectSchema } from "@shared/schema";
 import { runAgent, generateMockCodeChanges } from "./agents";
 import devRoutes from "./dev-routes";
@@ -24,7 +23,10 @@ import swarmRoutes from "./routes/swarm.js";
 import githubRoutes from "./routes/github.js";
 import { initChatWS } from "./chat/ws";
 import { createProjectHandler } from "./routes/create-project";
-import { runAgentRequestSchema } from "./run-agent-request-schema";
+import {
+  formatRunAgentValidationError,
+  runAgentRequestSchema,
+} from "./run-agent-request-schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Mount GitHub API routes
@@ -108,8 +110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const parsedBody = runAgentRequestSchema.safeParse(req.body);
 
       if (!parsedBody.success) {
-        const fieldErrors = parsedBody.error.flatten().fieldErrors;
-        const message = fieldErrors.agentType?.[0] ?? "Invalid agent run payload";
+        const { message, fieldErrors } = formatRunAgentValidationError(parsedBody.error);
         return res.status(400).json({
           error: message,
           details: fieldErrors,
