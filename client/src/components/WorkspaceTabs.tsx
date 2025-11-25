@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import DevConsole from '../pages/dev-console';
 import DiffPage from '../pages/diff';
 import Usage from '../pages/usage';
@@ -12,16 +12,37 @@ interface WorkspaceTabsProps {
 }
 
 export default function WorkspaceTabs({ roomId }: WorkspaceTabsProps) {
-  const [tab, setTab] = useState('project');
+  const [tab, setTab] = useState(() => {
+    if (typeof window === 'undefined') return 'project';
+    try {
+      const saved = window.localStorage.getItem('workbench.activeTab');
+      return saved || 'project';
+    } catch {
+      return 'project';
+    }
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem('workbench.activeTab', tab);
+    } catch {
+      // ignore persistence failures
+    }
+  }, [tab]);
+
+  const setTabAndPersist = (value: string) => {
+    setTab(value);
+  };
 
   return (
     <div className="workspace-tabs">
       <div className="tabbar">
         {['project', 'diffs', 'preview', 'receipts', 'lpm', 'intent', 'swarm', 'usage', 'settings'].map(t => (
-          <div 
-            key={t} 
-            className={'tab ' + (tab === t ? 'active' : '')} 
-            onClick={() => setTab(t)}
+          <div
+            key={t}
+            className={'tab ' + (tab === t ? 'active' : '')}
+            onClick={() => setTabAndPersist(t)}
             data-testid={`tab-${t}`}
           >
             {t[0].toUpperCase() + t.slice(1)}
