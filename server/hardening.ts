@@ -43,13 +43,55 @@ export function createOriginValidator(
 
     return {
       allowed: false,
-      message: `Origin ${origin} is not allowed`,
+      message:
+        normalizedOrigins.length > 0
+          ? `Origin ${origin} is not allowed. Allowed origins: ${normalizedOrigins.join(", ")}.`
+          : `Origin ${origin} is not allowed. Configure CORS_ALLOWED_ORIGINS to permit trusted frontends.`,
     };
   };
 
   return {
     allowAllInDevelopment,
     check,
+  };
+}
+
+export function createCorsOptionsDelegate(
+  validator: OriginValidator,
+  logger: Pick<typeof console, "warn"> = console,
+): CorsOptionsDelegate<Request> {
+  return (req, callback) => {
+    const origin = req.header("Origin") ?? undefined;
+    const result = validator.check(origin);
+
+    if (result.allowed) {
+      const options: CorsOptions = {
+        origin: validator.allowAllInDevelopment ? true : origin ?? false,
+        credentials: true,
+      };
+
+      callback(null, options);
+      return;
+    }
+
+    const errorMessage =
+      result.message ??
+      (origin
+        ? `Origin ${origin} is not allowed`
+        : "Origin is not allowed for this request");
+
+    logger.warn("[security] Blocked request from disallowed origin", {
+      origin: origin ?? "unknown",
+      method: req.method,
+      path: req.originalUrl,
+      message: errorMessage,
+      allowAllInDevelopment: validator.allowAllInDevelopment,
+    });
+
+    const error: Error & { status?: number } = new Error(errorMessage);
+    error.status = 403;
+
+    callback(error);
   };
 }
 
@@ -75,35 +117,10 @@ export function applySecurity(app: Express) {
     isDevelopment,
   );
 
-  const corsOptionsDelegate: CorsOptionsDelegate<Request> = (req, callback) => {
-    const origin = req.header("Origin") ?? undefined;
-    const result = check(origin);
-
-    if (result.allowed) {
-      const options: CorsOptions = {
-        origin: allowAllInDevelopment ? true : origin ?? true,
-        credentials: true,
-      };
-
-      callback(null, options);
-      return;
-    }
-
-    if (origin) {
-      console.warn("[security] Blocked request from disallowed origin", {
-        origin,
-        method: req.method,
-        path: req.originalUrl,
-      });
-    }
-
-    const error: Error & { status?: number } = new Error(
-      result.message ?? "Origin is not allowed",
-    );
-    error.status = 403;
-
-    callback(error);
-  };
+  const corsOptionsDelegate = createCorsOptionsDelegate(
+    { allowAllInDevelopment, check },
+    console,
+  );
 
   app.use(cors(corsOptionsDelegate));
 
