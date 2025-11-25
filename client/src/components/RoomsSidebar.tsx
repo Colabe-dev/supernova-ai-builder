@@ -52,6 +52,12 @@ export function RoomsSidebar({ selectedRoomId, onRoomSelect }: RoomsSidebarProps
 
   const rooms = roomsData?.rooms || [];
 
+  useEffect(() => {
+    if (!selectedRoomId && rooms.length > 0) {
+      onRoomSelect(rooms[0].id);
+    }
+  }, [rooms, selectedRoomId, onRoomSelect]);
+
   // Create room mutation
   const createMutation = useMutation({
     mutationFn: async (name: string) => {
