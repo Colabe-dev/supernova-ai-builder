@@ -145,7 +145,7 @@ git commit -m "rotate jwks keys"
 AUTH_JWKS_URL=https://api.supernova.com/auth/.well-known/jwks.json
 AUTH_ISSUER=https://collab.supernova.auth
 AUTH_AUDIENCE=supernova-api
-APP_URL=https://app.supernova.com
+APP_URL=https://app.supernova.com       # Required; used for callback URLs when request host is unavailable
 DEV_AUTH_OPEN=false                    # ⚠️ MUST be false in production
 CORS_ALLOWED_ORIGINS=https://app.supernova.com,https://console.supernova.com  # Comma-separated list of allowed web origins (required; no wildcard fallback outside development)
 ISSUER_ADMIN_SECRET=<cryptographically-random-64-chars>

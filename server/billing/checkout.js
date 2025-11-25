@@ -32,12 +32,20 @@ export async function createCheckoutSession(productKey, profileId, options = {})
     cancelUrl,
     metadata = {},
     appUrl,
+    req,
   } = options;
 
-  const baseAppUrl = process.env.APP_URL || appUrl;
+  const hostFromRequest = req?.get?.('host');
+  const requestProtocol = req?.protocol;
+
+  const inferredAppUrl = appUrl || (hostFromRequest && requestProtocol
+    ? `${requestProtocol}://${hostFromRequest}`
+    : undefined);
+
+  const baseAppUrl = process.env.APP_URL || inferredAppUrl;
 
   if (!baseAppUrl) {
-    throw new Error('APP_URL is not configured. Set the APP_URL environment variable or provide an appUrl option.');
+    throw new Error('APP_URL is not configured. Set the APP_URL environment variable or ensure the request includes protocol and host information.');
   }
 
   const normalizedAppUrl = baseAppUrl.replace(/\/+$/, '');
