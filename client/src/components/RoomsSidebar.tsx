@@ -52,6 +52,13 @@ export function RoomsSidebar({ selectedRoomId, onRoomSelect }: RoomsSidebarProps
 
   const rooms = roomsData?.rooms || [];
 
+  // Auto-select the first available room so users can start chatting immediately
+  useEffect(() => {
+    if (!selectedRoomId && rooms.length > 0) {
+      onRoomSelect(rooms[0].id);
+    }
+  }, [rooms, selectedRoomId, onRoomSelect]);
+
   // Create room mutation
   const createMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -246,8 +253,11 @@ export function RoomsSidebar({ selectedRoomId, onRoomSelect }: RoomsSidebarProps
       {/* Rooms List */}
       <div className="flex-1 overflow-y-auto p-2">
         {rooms.length === 0 ? (
-          <div className="p-4 text-sm text-muted-foreground text-center">
-            No rooms yet. Create one to start chatting.
+          <div className="p-4 text-sm text-muted-foreground text-center space-y-2">
+            <div>No rooms yet. Create one to start chatting.</div>
+            <Button onClick={() => setIsCreateOpen(true)} size="sm" data-testid="button-empty-create-room">
+              <Plus className="h-4 w-4 mr-1" /> New room
+            </Button>
           </div>
         ) : (
           <div className="space-y-1">
