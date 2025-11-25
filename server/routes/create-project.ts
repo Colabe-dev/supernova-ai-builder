@@ -7,7 +7,14 @@ export async function createProjectHandler(req: Request, res: Response) {
   const validation = insertProjectSchema.safeParse(req.body);
 
   if (!validation.success) {
-    return res.status(400).json({ error: "Invalid project data" });
+    const fieldErrors = validation.error.flatten().fieldErrors;
+    const message =
+      validation.error.errors[0]?.message ?? "Invalid project data";
+
+    return res.status(400).json({
+      error: message,
+      details: fieldErrors,
+    });
   }
 
   try {

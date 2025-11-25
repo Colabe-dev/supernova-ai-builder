@@ -40,7 +40,14 @@ describe("createProjectHandler", () => {
     await createProjectHandler(req as Request, res as unknown as Response);
 
     assert.strictEqual(res.statusCode, 400);
-    assert.deepStrictEqual(res.jsonBody, { error: "Invalid project data" });
+    assert.deepStrictEqual(res.jsonBody, {
+      error: "Required",
+      details: {
+        name: ["Required"],
+        type: ["Required"],
+        templateId: ["Required"],
+      },
+    });
     assert.strictEqual(createProjectMock.mock.calls.length, 0);
   });
 
