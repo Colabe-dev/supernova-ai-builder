@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertProjectSchema, insertAgentRunSchema } from "@shared/schema";
+import { insertAgentRunSchema } from "@shared/schema";
 import { runAgent, generateMockCodeChanges } from "./agents";
 import devRoutes from "./dev-routes";
 import approvalsRoutes from "./approvals-routes";
@@ -22,6 +22,7 @@ import healingRoutes from "./routes/healing.js";
 import swarmRoutes from "./routes/swarm.js";
 import githubRoutes from "./routes/github.js";
 import { initChatWS } from "./chat/ws";
+import { createProjectHandler } from "./routes/create-project";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Mount GitHub API routes
@@ -79,15 +80,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/projects", async (req, res) => {
-    try {
-      const validatedData = insertProjectSchema.parse(req.body);
-      const project = await storage.createProject(validatedData);
-      res.status(201).json(project);
-    } catch (error) {
-      res.status(400).json({ error: "Invalid project data" });
-    }
-  });
+  app.post("/api/projects", createProjectHandler);
 
   app.get("/api/templates", async (req, res) => {
     try {
