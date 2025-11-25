@@ -31,6 +31,7 @@ export default function ChatEmbedded({ roomId }: ChatEmbeddedProps) {
   const [model, setModel] = useState('');
   const wsRef = useRef<WebSocket | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
+  const isRoomLinked = Boolean(roomId);
 
   // Load room messages when roomId changes
   const { data: messagesData } = useQuery({
@@ -136,6 +137,11 @@ export default function ChatEmbedded({ roomId }: ChatEmbeddedProps) {
   return (
     <div className="chat-embed">
       <div className="log" ref={logRef}>
+        <div className="session-hint" role="status">
+          {isRoomLinked
+            ? `Linked to room ${roomId?.slice(0, 8) || ''}. Messages will be saved and shareable.`
+            : 'Roomless chat enabled. Messages stay local to this session. Pick a room if you want history.'}
+        </div>
         {log.map((m, i) => (
           <div key={i} className={'msg ' + (m.type === 'user' ? 'user' : m.type === 'tool_result' ? 'tool' : '')}>
             <div style={{ opacity: .7, fontSize: 12 }}>{m.type}</div>

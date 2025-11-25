@@ -74,7 +74,7 @@ export default function Workbench() {
 
   const roomLabel = selectedRoomId
     ? `Room ${selectedRoomId.slice(0, 6)}…`
-    : 'No room selected';
+    : 'Roomless chat (not persisted)';
 
   return (
     <div
@@ -88,6 +88,7 @@ export default function Workbench() {
         <div className="toolbar-meta">
           <div className="chip" aria-live="polite">{roomLabel}</div>
           <div className="chip">Chat width: {Math.round(chatPct)}%</div>
+          <div className="chip subtle">Rooms are optional — start chatting immediately.</div>
           <div className="chip subtle">Drag or use ←/→ to resize</div>
         </div>
         <div className="toolbar-actions" aria-label="Layout quick actions">
@@ -99,6 +100,9 @@ export default function Workbench() {
           </button>
           <button className="btn ghost" onClick={() => adjustPct(60)} data-testid="layout-focus-chat">
             Focus chat
+          </button>
+          <button className="btn ghost" onClick={() => setSelectedRoomId(null)} data-testid="layout-roomless">
+            Roomless chat
           </button>
           <button className="btn" onClick={() => adjustPct(35)} data-testid="layout-reset">
             Reset layout
