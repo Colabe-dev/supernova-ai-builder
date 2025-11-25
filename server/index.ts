@@ -1,14 +1,23 @@
-import express, { type Express, type Request, Response, NextFunction } from "express";
+import express, { type Express } from "express";
 import cookieParser from "cookie-parser";
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
-import { applySecurity } from "./hardening";
+import { applySecurity } from "./hardening.ts";
 import { applyObservability, errorHandler } from "./observability/index.js";
-import { createResponseLoggingMiddleware } from "./observability/response-logger";
+import { createResponseLoggingMiddleware } from "./observability/response-logger.ts";
 import webhooksRouter from "./entitlements/webhooks-enhanced.js";
 import issuerRouter from "./auth/issuer/index.js";
 import jwksRouter from "./auth/jwks/publish.js";
 import { parseAuthJwks, requireAuth } from "./auth/verify.js";
+
+function log(message: string, source = "express") {
+  const formattedTime = new Date().toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+
+  console.log(`${formattedTime} [${source}] ${message}`);
+}
 
 // Enable dev console features in development
 if (process.env.NODE_ENV === "development") {
@@ -42,62 +51,19 @@ export function createApp(): Express {
   app.use('/auth', jwksRouter);  // GET /auth/.well-known/jwks.json
   app.use('/auth', issuerRouter); // POST /auth/token
 
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    const start = Date.now();
-    const path = req.path;
-    let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-    const originalResJson = res.json;
-    res.json = function (bodyJson, ...args) {
-      capturedJsonResponse = bodyJson;
-      return originalResJson.apply(res, [bodyJson, ...args]);
-    };
-
-    res.on("finish", () => {
-      const duration = Date.now() - start;
-      if (path.startsWith("/api")) {
-        let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-        if (capturedJsonResponse) {
-          logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-        }
-
-        if (logLine.length > 80) {
-          logLine = logLine.slice(0, 79) + "…";
-        }
-
-        log(logLine);
-      }
-    });
-
-    next();
-  });
+  app.use(createResponseLoggingMiddleware(log));
 
   return app;
 }
-// Apply security hardening (helmet, CORS, rate limiting)
-applySecurity(app);
-
-// Apply observability (Pino logging + Sentry)
-applyObservability(app);
-
-// IMPORTANT: Register webhook routes BEFORE JSON body parsing
-// to allow raw body access for signature verification
-app.use('/api/webhooks', webhooksRouter);
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-
-// Mount Security Pro: JWKS endpoint and Auth Issuer
-app.use('/auth', jwksRouter);  // GET /auth/.well-known/jwks.json
-app.use('/auth', issuerRouter); // POST /auth/token
-
-app.use(createResponseLoggingMiddleware(log));
 
 if (process.env.NODE_ENV !== "test") {
   const app = createApp();
 
   (async () => {
+    const { registerRoutes } = await import("./routes.ts");
+    const { setupVite, serveStatic, log: viteLog } = await import("./vite.ts");
     const server = await registerRoutes(app);
+    const runtimeLog = viteLog ?? log;
 
     // Use centralized error handler with Sentry integration
     app.use(errorHandler);
@@ -121,7 +87,7 @@ if (process.env.NODE_ENV !== "test") {
       host: "0.0.0.0",
       reusePort: true,
     }, () => {
-      log(`serving on port ${port}`);
+      runtimeLog(`serving on port ${port}`);
     });
   })();
 }
