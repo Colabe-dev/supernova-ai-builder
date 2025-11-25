@@ -48,6 +48,7 @@ AUTH_JWKS_URL=https://api.supernova.com/auth/.well-known/jwks.json
 AUTH_ISSUER=https://collab.supernova.auth
 AUTH_AUDIENCE=supernova-api
 DEV_AUTH_OPEN=false  # CRITICAL: Enforce JWT verification in production
+CORS_ALLOWED_ORIGINS=https://app.supernova.com,https://console.supernova.com  # Lock CORS to trusted frontends
 ```
 
 ### Verify JWKS Endpoint

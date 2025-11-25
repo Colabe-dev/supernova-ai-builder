@@ -146,6 +146,7 @@ AUTH_JWKS_URL=https://api.supernova.com/auth/.well-known/jwks.json
 AUTH_ISSUER=https://collab.supernova.auth
 AUTH_AUDIENCE=supernova-api
 DEV_AUTH_OPEN=false                    # ⚠️ MUST be false in production
+CORS_ALLOWED_ORIGINS=https://app.supernova.com,https://console.supernova.com  # Comma-separated list of allowed web origins
 ISSUER_ADMIN_SECRET=<cryptographically-random-64-chars>
 APP_JWT_SECRET=<cryptographically-random-64-chars>
 SESSION_SECRET=<cryptographically-random-64-chars>
