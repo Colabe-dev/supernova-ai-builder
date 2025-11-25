@@ -41,9 +41,6 @@ router.post('/checkout', async (req, res) => {
       ...(refCode && { ref_code: refCode }),
     };
 
-    const host = req.get('host');
-    const inferredAppUrl = host ? `${req.protocol}://${host}` : undefined;
-
     const session = await createCheckoutSession(
       productKey,
       profileId,
@@ -51,7 +48,7 @@ router.post('/checkout', async (req, res) => {
         metadata: checkoutMetadata,
         successUrl: req.body.successUrl,
         cancelUrl: req.body.cancelUrl,
-        appUrl: inferredAppUrl,
+        req,
       }
     );
 

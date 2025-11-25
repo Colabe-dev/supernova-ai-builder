@@ -25,6 +25,13 @@ test.afterEach(() => {
   global.fetch = originalFetch;
 });
 
+function createRequest({ host } = {}) {
+  return {
+    protocol: 'https',
+    get: (header) => header === 'host' ? host : undefined,
+  };
+}
+
 test('uses APP_URL environment variable when provided', async () => {
   process.env.APP_URL = 'https://configured.app';
 
@@ -39,7 +46,7 @@ test('uses APP_URL environment variable when provided', async () => {
 
   const result = await createCheckoutSession('PRO_MONTHLY', 'profile_123', {
     metadata: { example: 'value' },
-    appUrl: 'https://ignored.example',
+    req: createRequest({ host: 'ignored.example' }),
   });
 
   assert.equal(payload.success_url, 'https://configured.app/dashboard?payment=success');
@@ -48,7 +55,7 @@ test('uses APP_URL environment variable when provided', async () => {
   assert.equal(result.sessionId, 'sess_123');
 });
 
-test('falls back to provided appUrl when APP_URL env is missing', async () => {
+test('infers appUrl from request when APP_URL env is missing', async () => {
   delete process.env.APP_URL;
 
   let payload;
@@ -60,11 +67,9 @@ test('falls back to provided appUrl when APP_URL env is missing', async () => {
     };
   };
 
-  const fallbackUrl = 'https://fallback.example/';
-
   const result = await createCheckoutSession('PRO_MONTHLY', 'profile_456', {
     metadata: {},
-    appUrl: fallbackUrl,
+    req: createRequest({ host: 'fallback.example' }),
   });
 
   assert.equal(payload.success_url, 'https://fallback.example/dashboard?payment=success');
@@ -80,8 +85,8 @@ test('throws a configuration error when APP_URL cannot be determined', async () 
   };
 
   await assert.rejects(
-    () => createCheckoutSession('PRO_MONTHLY', 'profile_789', { metadata: {} }),
-    /APP_URL is not configured/
+    () => createCheckoutSession('PRO_MONTHLY', 'profile_789', { metadata: {}, req: createRequest() }),
+    /APP_URL is not configured/,
   );
 });
 
