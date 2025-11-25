@@ -216,6 +216,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+  httpServer.keepAliveTimeout = 60_000;
+  httpServer.headersTimeout = 65_000;
+  httpServer.requestTimeout = 30_000;
+  httpServer.setTimeout(30_000);
 
   // Initialize WebSocket for live chat (Sprint 4)
   initChatWS(httpServer);
