@@ -31,7 +31,7 @@ const router = express.Router();
 
 // Ensure the Collab Pay webhook route always receives the raw request body
 // regardless of any JSON/body parsing middleware applied elsewhere.
-router.use('/collab-pay', express.raw({ type: 'application/json' }));
+const collabPayRawParser = express.raw({ type: 'application/json' });
 
 // In-memory event tracking for idempotency (use Redis/DB in production)
 const processedEvents = new Set();
@@ -51,7 +51,7 @@ if (typeof cleanupInterval.unref === 'function') {
 }
 
 // POST /collab-pay - Enhanced webhook handler with SKU mapping
-router.post('/collab-pay', async (req, res) => {
+router.post('/collab-pay', collabPayRawParser, async (req, res) => {
   try {
     const secret = process.env.COLLAB_PAY_WEBHOOK_SECRET;
     const timestamp = req.headers['x-collab-timestamp'];
