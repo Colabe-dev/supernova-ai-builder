@@ -42,18 +42,27 @@ function attachSnapshot(res: Response, snapshot: string | undefined) {
   }
 }
 
+type ResponseMethod<T extends keyof Pick<Response, "json" | "send">> = Response[T] extends (
+  ...args: infer P
+) => infer R
+  ? (...args: P) => R
+  : never;
+
 function wrapResponseMethod<
-  T extends (...args: any[]) => Response,
+  T extends keyof Pick<Response, "json" | "send">,
 >(
-  method: T,
+  res: Response,
+  methodName: T,
   setSnapshot: (payload: string | undefined) => void,
 ) {
-  return function wrapped(this: Response, ...args: Parameters<T>): ReturnType<T> {
+  const boundMethod = (res[methodName] as ResponseMethod<T>).bind(res);
+
+  return function wrapped(this: Response, ...args: Parameters<ResponseMethod<T>>) {
     const [body] = args as unknown[];
     const snapshot = snapshotPayload(body);
     setSnapshot(snapshot);
-    return method.apply(this, args);
-  } as T;
+    return boundMethod(...args);
+  } as Response[T];
 }
 
 export function createResponseLoggingMiddleware(log: ResponseLogger) {
@@ -66,11 +75,8 @@ export function createResponseLoggingMiddleware(log: ResponseLogger) {
       attachSnapshot(res, snapshot);
     };
 
-    const originalJson = res.json;
-    const originalSend = res.send;
-
-    res.json = wrapResponseMethod(originalJson, setSnapshot);
-    res.send = wrapResponseMethod(originalSend, setSnapshot);
+    res.json = wrapResponseMethod(res, "json", setSnapshot);
+    res.send = wrapResponseMethod(res, "send", setSnapshot);
 
     res.on("finish", () => {
       const duration = Date.now() - start;
