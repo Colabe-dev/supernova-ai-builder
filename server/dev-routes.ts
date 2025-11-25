@@ -150,6 +150,11 @@ function makeUnifiedDiff(file: string, a: string, b: string): string {
 const sseClients = new Set<Response>();
 
 router.get("/dev/preview/stream", (req: Request, res: Response) => {
+  // Disable request/socket timeouts for this long-lived SSE connection.
+  req.setTimeout(0);
+  res.setTimeout?.(0);
+  res.socket?.setTimeout(0);
+
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
